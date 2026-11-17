@@ -1,8 +1,12 @@
 name: CI
 
+# On main and on pull requests. release.yml calls it too, so a tag is released only after these tests passed
+# on the tagged commit.
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read

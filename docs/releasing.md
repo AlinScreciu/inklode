@@ -63,7 +63,7 @@ A release is a GitHub release of `AlinScreciu/inklode` with four files, made by 
 git tag v<version> && git push origin v<version>
 ```
 
-The workflow refuses a tag that is not `v` plus the version in the manifests. It runs `scripts/release.sh` and attaches the four files to a **draft** release whose notes are the version's section of `CHANGELOG.md`. Nothing reaches installed apps until the draft is published: download the disk image from the draft, do step 6, then `gh release edit v<version> --draft=false --latest` (or "Publish release" on the page), then step 8.
+The workflow refuses a tag that is not `v` plus the version in the manifests. It runs the tests of `ci.yml` on the tagged commit and, only if they pass, runs `scripts/release.sh` and attaches the four files to a **draft** release whose notes are the version's section of `CHANGELOG.md`. Nothing reaches installed apps until the draft is published: download the disk image from the draft, do step 6, then `gh release edit v<version> --draft=false --latest` (or "Publish release" on the page), then step 8.
 
 The job runs in the environment `release`, which holds its secrets, so no other workflow can read them:
 
