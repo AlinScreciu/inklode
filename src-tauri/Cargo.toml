@@ -1,6 +1,6 @@
 [package]
 name = "inklode"
-version = "0.1.1"
+version = "0.1.2"
 license = "MIT"
 description = "Inklode desktop shell: the window and the bridge from the UI to inklode-core."
 authors = ["Alin Screciu"]

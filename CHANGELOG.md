@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+No change to the app. The first version built, signed and notarized by CI from a pushed tag.
+
 ## 0.1.1
 
 No change to the app. This version exists to check that an installed 0.1.0 finds, downloads and installs an update.
