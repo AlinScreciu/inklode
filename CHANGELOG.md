@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+No change to the app. This version exists to check that an installed 0.1.0 finds, downloads and installs an update.
+
 ## 0.1.0
 
 The first public version. Tested on macOS on Apple Silicon only. A signed app for Apple Silicon is attached to the release; elsewhere, build from source.
