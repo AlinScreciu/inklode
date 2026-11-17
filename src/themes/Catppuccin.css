@@ -1,0 +1,115 @@
+/*
+ * Catppuccin for Inklode: Latte in light appearance, Mocha in dark.
+ *
+ * A port to Inklode's variables of Catppuccin for Obsidian, https://github.com/catppuccin/obsidian,
+ * with the palette from https://github.com/catppuccin/palette. No rule of the original stylesheet is copied.
+ *
+ * MIT License. Copyright (c) 2021 Catppuccin.
+ * The full licence text is in THIRD-PARTY-NOTICES.md at the root of the Inklode repository.
+ */
+
+/* Latte */
+:root {
+  --ctp-rosewater: #dc8a78;
+  --ctp-pink: #ea76cb;
+  --ctp-maroon: #e64553;
+  --ctp-red: #d20f39;
+  --ctp-yellow: #df8e1d;
+  --ctp-green: #40a02b;
+  --ctp-sky: #04a5e5;
+  --ctp-sapphire: #209fb5;
+  --ctp-blue: #1e66f5;
+  --ctp-lavender: #7287fd;
+  --ctp-text: #4c4f69;
+  --ctp-subtext0: #6c6f85;
+  --ctp-overlay2: #7c7f93;
+  --ctp-surface2: #acb0be;
+  --ctp-surface1: #bcc0cc;
+  --ctp-surface0: #ccd0da;
+  --ctp-base: #eff1f5;
+  --ctp-mantle: #e6e9ef;
+  --ctp-crust: #dce0e8;
+}
+
+/* Mocha */
+:root[data-appearance="dark"] {
+  --ctp-rosewater: #f5e0dc;
+  --ctp-pink: #f5c2e7;
+  --ctp-maroon: #eba0ac;
+  --ctp-red: #f38ba8;
+  --ctp-yellow: #f9e2af;
+  --ctp-green: #a6e3a1;
+  --ctp-sky: #89dceb;
+  --ctp-sapphire: #74c7ec;
+  --ctp-blue: #89b4fa;
+  --ctp-lavender: #b4befe;
+  --ctp-text: #cdd6f4;
+  --ctp-subtext0: #a6adc8;
+  --ctp-overlay2: #9399b2;
+  --ctp-surface2: #585b70;
+  --ctp-surface1: #45475a;
+  --ctp-surface0: #313244;
+  --ctp-base: #1e1e2e;
+  --ctp-mantle: #181825;
+  --ctp-crust: #11111b;
+}
+
+/*
+ * Mapping. The same text in every Catppuccin*.css, which `pnpm test:themes` checks.
+ * `:root[data-appearance]`, because plain `:root` loses to the app's own dark values.
+ */
+:root[data-appearance] {
+  --bg: var(--ctp-base);
+  --bg-sidebar: var(--ctp-mantle);
+  --bg-ribbon: var(--ctp-crust);
+  --bg-elevated: var(--ctp-base);
+  --bg-hover: color-mix(in srgb, var(--ctp-text) 8%, transparent);
+  --bg-active: color-mix(in srgb, var(--ctp-lavender) 16%, transparent);
+  --border: var(--ctp-surface0);
+  --text: var(--ctp-text);
+  --text-muted: var(--ctp-subtext0);
+  /* Lavender is the accent of the Obsidian port when its Style Settings are untouched. */
+  --accent: var(--ctp-lavender);
+  --accent-text: var(--ctp-mantle);
+  --error: var(--ctp-red);
+  --tooltip-bg: var(--ctp-surface1);
+  --tooltip-text: var(--ctp-text);
+
+  --syntax-heading: var(--ctp-lavender);
+  --syntax-link: var(--ctp-blue);
+  --syntax-code: var(--ctp-subtext0);
+  --syntax-quote: var(--ctp-rosewater);
+  /* The port uses surface1 for Markdown marks and code comments, which is close to invisible. */
+  --syntax-meta: var(--text-faint);
+  --syntax-keyword: var(--ctp-pink);
+  --syntax-string: var(--ctp-green);
+  --syntax-number: var(--ctp-lavender);
+  --syntax-type: var(--ctp-yellow);
+  --syntax-function: var(--ctp-yellow);
+  --syntax-property: var(--ctp-sky);
+
+  --selection-bg: color-mix(in srgb, var(--ctp-overlay2) 30%, transparent);
+  --heading-6-text: var(--ctp-lavender);
+  --inline-title-text: var(--ctp-text);
+  --blockquote-bar: var(--ctp-lavender);
+  --rule-color: var(--ctp-blue);
+  --bullet-color: var(--ctp-sapphire);
+  --list-number-text: var(--ctp-sapphire);
+  --task-done-text: var(--ctp-green);
+  --table-header-bg: var(--ctp-base);
+  --graph-edge: var(--ctp-surface2);
+  --hit-mark-bg: color-mix(in srgb, var(--ctp-rosewater) 35%, transparent);
+}
+
+/* Coloured emphasis is a mark of the Catppuccin port, and Inklode has no variables for it. */
+.tok-strong {
+  color: var(--ctp-sapphire);
+}
+
+.tok-emphasis {
+  color: var(--ctp-green);
+}
+
+.tok-strikethrough {
+  color: var(--ctp-maroon);
+}

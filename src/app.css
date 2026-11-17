@@ -1,0 +1,4110 @@
+/*
+ * Inklode base styles. Every colour, font and size comes from a variable on
+ * :root, so a theme is a CSS file that sets these variables again.
+ * Variable and class names here are what themes and snippets rely on.
+ *
+ * Light and dark: <html> always has `data-appearance="light"` or `"dark"` (src/appearance.ts).
+ * `:root` holds the light values and everything that is the same in both;
+ * `:root[data-appearance="dark"]`, below, holds what differs in dark. A theme does the same.
+ */
+:root {
+  color-scheme: light;
+
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-text: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-size-ui: 13px;
+  --font-size-text: 16px;
+  --line-height-text: 1.6;
+  --line-width: 46rem;
+  --radius: 6px;
+  /* Smaller, for what sits inside a rounded box (menu items, keycaps), and larger, for dialogs and menus. */
+  --radius-s: 4px;
+  --radius-l: 10px;
+
+  /* Sizes of the shell. Spacing everywhere is a multiple of 4px. */
+  --ribbon-width: 44px;
+  /* The app sets this on `.app` when the sidebar's edge is dragged. */
+  --sidebar-width: 260px;
+  /* The sidebar's header and a pane's header. */
+  --header-height: 40px;
+  --status-height: 24px;
+  /* A row of the file tree. */
+  --row-height: 28px;
+  /* The strip of tabs over a pane, and how wide a tab is while there is room. */
+  --tab-height: 36px;
+  --tab-width: 180px;
+  /* The right sidebar (the outline). The app sets this on `.app` when its edge is dragged. */
+  --right-sidebar-width: 260px;
+  /* Tabs: the strip is on the sidebar's layer and the tab that shows is on the note's, so it reads as part of the pane. */
+  --tab-strip-bg: var(--bg-sidebar);
+  --tab-text: var(--text-muted);
+  --tab-active-bg: var(--bg);
+  --tab-active-text: var(--text);
+  /* The line over the shown tab of the active pane, when there is more than one pane. */
+  --tab-active-mark: var(--accent);
+  /* The line between two panes. */
+  --pane-divider: var(--border);
+  /* Hover and state changes. */
+  --transition: 120ms ease-out;
+
+  /*
+   * Surfaces, in layers: the ribbon is the darkest, then the sidebar, then `--bg`, which notes are on.
+   * Dialogs and menus are on `--bg-elevated`, with a shadow. The ribbon and the elevated surface are
+   * mixed from the two a theme always sets, so a theme gets them without naming them.
+   */
+  --bg: #fcfbf9;
+  --bg-sidebar: #f4f2ee;
+  --bg-ribbon: color-mix(in srgb, var(--bg-sidebar) 96%, black);
+  --bg-elevated: color-mix(in srgb, var(--bg) 50%, white);
+  /* Laid over a surface under the pointer, and under what is selected. See-through, so they work on every layer. */
+  --bg-hover: rgb(30 24 12 / 0.06);
+  --bg-active: rgb(30 24 12 / 0.1);
+  --border: #e3e0da;
+  --text: #26241f;
+  /* Secondary text: at least 4.5:1 on every surface. */
+  --text-muted: #6b6860;
+  /* Placeholders, disabled buttons, small marks such as a folder's arrow: at least 3:1 on `--bg` and the sidebar. */
+  --text-faint: color-mix(in srgb, var(--text-muted) 78%, var(--bg));
+  /* The one accent: links, the caret, the main button, what is switched on. */
+  --accent: #b84a14;
+  /* Text on an accent background. */
+  --accent-text: #ffffff;
+  /* A tint of the accent, behind something that is on or being changed. */
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --error: #c0262d;
+  /* The outline of what the keyboard has focused. */
+  --focus-ring: color-mix(in srgb, var(--accent) 70%, transparent);
+  /* Dims the window behind a dialog. */
+  --backdrop: rgb(24 20 12 / 0.3);
+  /* Under menus and tooltips, and under dialogs. */
+  --shadow-popover: 0 0 0 0.5px rgb(0 0 0 / 0.08), 0 6px 20px rgb(0 0 0 / 0.14);
+  --shadow-dialog: 0 24px 60px rgb(0 0 0 / 0.24);
+  --tooltip-bg: var(--text);
+  --tooltip-text: var(--bg);
+
+  --syntax-heading: var(--text);
+  --syntax-link: var(--accent);
+  --syntax-code: #0f766e;
+  --syntax-quote: var(--text-muted);
+  --syntax-meta: var(--text-muted);
+  /* Code inside fenced blocks. Each is a hue mixed with the text colour, so it stays readable on a light and on a dark background. */
+  --syntax-keyword: color-mix(in oklab, #d1456b 62%, var(--text));
+  --syntax-string: color-mix(in oklab, #3fa565 62%, var(--text));
+  --syntax-number: color-mix(in oklab, #d98a2b 62%, var(--text));
+  --syntax-type: color-mix(in oklab, #1ea5b8 62%, var(--text));
+  --syntax-function: color-mix(in oklab, #4d7fe6 62%, var(--text));
+  --syntax-property: var(--text);
+  --syntax-comment: var(--text-muted);
+  --syntax-punctuation: var(--text-muted);
+
+  /* Editor */
+  /* Space left and right of the text column, which matters when the pane is narrower than `--line-width`. */
+  --editor-padding: clamp(20px, 5vw, 48px);
+  --selection-bg: color-mix(in srgb, var(--accent) 28%, transparent);
+  --caret-color: var(--accent);
+  --scrollbar-thumb: color-mix(in srgb, var(--text-muted) 35%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--text-muted) 60%, transparent);
+
+  /* Live Preview */
+  --heading-1-size: 1.9em;
+  --heading-2-size: 1.5em;
+  --heading-3-size: 1.25em;
+  --heading-4-size: 1.1em;
+  --heading-5-size: 1em;
+  --heading-6-size: 0.9em;
+  --heading-line-height: 1.25;
+  --heading-weight: 650;
+  --heading-1-weight: 750;
+  /* Space over a heading, on top of the empty line before it. In the heading's own em, so bigger headings get more. */
+  --heading-space: 0.5em;
+  --heading-6-text: var(--text-muted);
+  /* The note's name as a title, over a note whose text does not start with a level 1 heading. */
+  --inline-title-text: var(--syntax-heading);
+  --frontmatter-text: var(--text-muted);
+  --frontmatter-bg: var(--bg-sidebar);
+  --frontmatter-size: 0.8em;
+  /* Frontmatter shown as properties: a key column and values, `tags` as pills. */
+  --props-size: var(--font-size-ui);
+  --props-key-text: var(--text-muted);
+  --props-pill-bg: var(--bg-hover);
+  --props-tag-bg: color-mix(in srgb, var(--accent) 16%, transparent);
+  --props-tag-text: var(--accent);
+  --link-text: var(--syntax-link);
+  --link-external-text: var(--link-text);
+  --link-unresolved-text: color-mix(in srgb, var(--link-text) 55%, transparent);
+  --code-bg: var(--bg-sidebar);
+  --code-size: 0.875em;
+  --code-fence-text: var(--text-muted);
+  --code-block-padding: 16px;
+  --blockquote-bar: var(--border);
+  --blockquote-bar-width: 3px;
+  --blockquote-indent: 16px;
+  --blockquote-text: var(--syntax-quote);
+  --rule-color: var(--border);
+  --bullet-color: var(--text-muted);
+  --bullet-size: 0.36em;
+  /* How far each level of a list is indented, and the width of the box that holds a bullet, number or checkbox. */
+  --list-indent: 1.5em;
+  --list-marker-width: 1.8em;
+  --list-number-text: var(--text-muted);
+  --checkbox-color: var(--accent);
+  --checkbox-size: 1em;
+  --checkbox-border: var(--text-muted);
+  --checkbox-check: var(--bg);
+  --task-done-text: var(--text-muted);
+  --image-max-height: 60vh;
+  --embed-border: var(--border);
+  --embed-bg: var(--bg);
+  /* Tables in Live Preview */
+  --table-border: var(--border);
+  --table-header-bg: var(--bg-sidebar);
+  --table-row-hover: color-mix(in srgb, var(--bg-hover) 50%, transparent);
+  --table-cell-padding: 6px 12px;
+  --table-size: 0.9375em;
+
+  /* Graph view. The canvas reads these, and again when the theme changes. */
+  --graph-node: var(--text-muted);
+  --graph-edge: var(--border);
+  /* The note that was open when the graph was opened. */
+  --graph-open: var(--accent);
+  --graph-label: var(--text);
+  --graph-label-size: 11px;
+  /* An outline around each label, so it reads over lines and dots. */
+  --graph-label-halo: var(--bg);
+  /* The note under the pointer, and its lines. */
+  --graph-hover: var(--accent);
+  --graph-bg: var(--bg);
+
+  /* A comparison of two texts (components/DiffView.tsx): lines only in the newer text and lines only in the older one. */
+  --diff-added-bg: color-mix(in srgb, var(--syntax-string) 16%, transparent);
+  --diff-added-mark: var(--syntax-string);
+  --diff-removed-bg: color-mix(in srgb, var(--error) 13%, transparent);
+  --diff-removed-mark: var(--error);
+  /* The row that stands for a run of unchanged lines. */
+  --diff-fold-text: var(--text-muted);
+  --diff-size: 12px;
+
+  /* The history margin beside a note's text: who last changed each part, and the mark of lines not committed yet. */
+  --blame-width: 11rem;
+  --blame-size: 11px;
+  --blame-text: var(--text-muted);
+  --blame-uncommitted: var(--accent);
+
+  /* Claims: the mark of each status, and how see-through the text of a claim is that is stale or was never checked. */
+  --claim-passing: var(--syntax-string);
+  --claim-failing: var(--error);
+  --claim-stale: var(--syntax-number);
+  --claim-unchecked: var(--text-muted);
+  --claim-dim: 0.55;
+
+  /* The review inbox: the width of its list of notes, and the count on a ribbon button. */
+  --review-list-width: 300px;
+  --badge-bg: var(--accent);
+  --badge-text: var(--accent-text);
+
+  /* Search results and backlinks */
+  --hit-mark-bg: color-mix(in srgb, var(--accent) 22%, transparent);
+  --hit-mark-text: var(--text);
+  /* How high the list of backlinks under a note gets before it scrolls. */
+  --backlinks-max-height: min(150px, 20vh);
+  /* Radius of the dot of a note without links, in px. Dots grow with the number of links. */
+  --graph-node-size: 4px;
+}
+
+/* What differs in dark: neutral, slightly cool greys, and the accent lighter so it reads on them. */
+:root[data-appearance="dark"] {
+  color-scheme: dark;
+
+  --bg: #1f2024;
+  --bg-sidebar: #191a1e;
+  --bg-ribbon: color-mix(in srgb, var(--bg-sidebar) 76%, black);
+  --bg-elevated: color-mix(in srgb, var(--bg) 96%, white);
+  --bg-hover: rgb(255 255 255 / 0.06);
+  --bg-active: rgb(255 255 255 / 0.1);
+  --border: #2e3037;
+  --text: #dcdde1;
+  --text-muted: #9a9ca5;
+  --accent: #e8824a;
+  --accent-text: #16130f;
+  --error: #f47067;
+  --backdrop: rgb(0 0 0 / 0.5);
+  --shadow-popover: 0 0 0 0.5px rgb(0 0 0 / 0.5), 0 8px 24px rgb(0 0 0 / 0.45);
+  --shadow-dialog: 0 24px 60px rgb(0 0 0 / 0.55);
+  --tooltip-bg: #3b3d45;
+  --tooltip-text: var(--text);
+  --syntax-code: #7cc4ba;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: var(--font-size-ui) / 1.4 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* The keyboard's focus, on anything that can be clicked. A mouse click shows none. */
+button:focus-visible,
+summary:focus-visible,
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* A button with text. On its own it is the main action; `is-quiet` is the other choice, `is-danger` one that removes something. */
+.button {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 500;
+  transition: filter var(--transition), background var(--transition);
+}
+
+.button:hover {
+  filter: brightness(1.08);
+}
+
+.button:active {
+  filter: brightness(0.94);
+}
+
+.button.is-quiet {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.button.is-quiet:hover {
+  background: var(--bg-hover);
+  filter: none;
+}
+
+.button.is-danger {
+  background: var(--error);
+  color: var(--bg);
+}
+
+/* A square button with only an icon: ribbon, headers, settings. Its name is in `aria-label`. */
+.icon-button {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  transition: background var(--transition), color var(--transition);
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.icon-button:active:not(:disabled) {
+  background: var(--bg-active);
+}
+
+.icon-button:disabled {
+  color: var(--text-faint);
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* A button that shows a state which is on, e.g. source mode. */
+.icon-button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/*
+ * The tooltip of an icon button: the text of `data-tip`, shown a moment after the pointer or the
+ * keyboard's focus arrives. `tip-right` opens beside the button (the ribbon), `tip-below` under it,
+ * `tip-end` under it and lined up with its right edge (buttons at the window's right).
+ */
+.icon-button[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 50;
+  padding: 4px 8px;
+  border-radius: var(--radius-s);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  box-shadow: var(--shadow-popover);
+  font: 500 11px / 1.4 var(--font-ui);
+  white-space: pre;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.icon-button[data-tip]:hover::after,
+.icon-button[data-tip]:focus-visible::after {
+  opacity: 1;
+  transition-delay: 500ms;
+}
+
+.icon-button.tip-right::after {
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.icon-button.tip-below::after {
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.icon-button.tip-end::after {
+  top: calc(100% + 6px);
+  right: 0;
+}
+
+/* A key, as a keycap. `.keys` is one shortcut: a cap per key. */
+.keys {
+  display: inline-flex;
+  gap: 3px;
+  flex: none;
+}
+
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-s);
+  background: var(--bg);
+  color: var(--text-muted);
+  font: 500 11px / 1 var(--font-ui);
+}
+
+/* The error banner, at the top of the pane. */
+.error {
+  margin: 8px 12px 0;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  color: var(--error);
+}
+
+.error button {
+  margin-left: 8px;
+  text-decoration: underline;
+}
+
+/* A line that says what just happened and goes away by itself (the merge module), at the bottom of the window. */
+.notice {
+  position: fixed;
+  left: 50%;
+  bottom: 36px;
+  z-index: 90;
+  max-width: min(90vw, 560px);
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-muted);
+  transform: translateX(-50%);
+  /* Never in the way of a click on what is under it. */
+  pointer-events: none;
+}
+
+/* The notice about an update of the app (components/Updates.tsx): it has buttons, stays until it is answered, and
+   shows over the settings screen, where "Check now" is. It sits above the place of the plain notice. */
+.update-notice {
+  bottom: 76px;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* As wide as its text, up to the notice's max-width. A long error wraps in its own column, left of the buttons. */
+  width: max-content;
+  color: var(--text);
+  pointer-events: auto;
+}
+
+.update-notice > span {
+  flex: 1 1 0;
+  min-width: 0;
+  user-select: text;
+}
+
+.update-notice > .button {
+  flex: none;
+}
+
+.update-notice[data-kind="error"] > span,
+.update-notice[data-kind="failed"] > span {
+  color: var(--error);
+}
+
+/* The banner over a note that could not be saved, with its choices (SaveIssue in components/Workspace.tsx). */
+.save-issue {
+  flex: none;
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--error) 45%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--error) 10%, var(--bg));
+  color: var(--text);
+}
+
+.save-issue-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.save-issue-text {
+  flex: 1 1 260px;
+  margin: 0;
+}
+
+.save-issue .button {
+  flex: none;
+}
+
+.save-issue .button:disabled {
+  color: var(--text-faint);
+}
+
+/* The file's text, under the banner's buttons: read-only, and scrolls by itself. */
+.save-issue-theirs {
+  max-height: 30vh;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg);
+  font: 12px / 1.5 var(--font-mono);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+/* Thin scrollbars in the shell's lists, like the note's. */
+.sidebar-body::-webkit-scrollbar,
+.palette-list::-webkit-scrollbar,
+.settings-body::-webkit-scrollbar,
+.menu::-webkit-scrollbar {
+  width: 10px;
+}
+
+.sidebar-body::-webkit-scrollbar-thumb,
+.palette-list::-webkit-scrollbar-thumb,
+.settings-body::-webkit-scrollbar-thumb,
+.menu::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 5px;
+  background: var(--scrollbar-thumb) content-box;
+}
+
+/* Welcome screen: no vault is open. It sits beside the ribbon. */
+.welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  user-select: none;
+}
+
+.welcome-mark {
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+
+.welcome h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.welcome p {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+}
+
+.welcome .button {
+  height: 32px;
+  padding: 0 20px;
+}
+
+.welcome .welcome-hint {
+  max-width: 300px;
+  margin-top: 16px;
+  font-size: 12px;
+  text-align: center;
+}
+
+/*
+ * Layout: the ribbon, the sidebar, then the pane, side by side. A right sidebar would be one more
+ * child of `.app` after the pane.
+ */
+.app {
+  height: 100%;
+  display: flex;
+}
+
+/* The icon rail at the window's left edge. Over the sidebar, so its tooltips are not cut off. */
+.ribbon {
+  position: relative;
+  z-index: 3;
+  width: var(--ribbon-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0 8px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-ribbon);
+  user-select: none;
+}
+
+.ribbon .icon-button {
+  width: 32px;
+  height: 32px;
+}
+
+.ribbon .icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Pushes the buttons after it to the bottom. */
+.ribbon-space {
+  flex: 1;
+}
+
+.sidebar {
+  position: relative;
+  z-index: 2;
+  width: var(--sidebar-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+
+/* The vault's name and the sidebar's buttons. */
+.sidebar-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--header-height);
+  padding: 0 6px 0 16px;
+}
+
+.sidebar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sidebar-actions {
+  display: flex;
+  gap: 2px;
+}
+
+/* The part that scrolls: the file tree, or the search box and its results. */
+.sidebar-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 8px 16px;
+}
+
+/* The sidebar's right edge, to drag. */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:active::after {
+  opacity: 1;
+}
+
+.pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+/*
+ * The panes (components/Workspace.tsx): columns side by side, each a stack of panes. A column's and a
+ * pane's share of the room is its `flex-grow`, which the app sets.
+ */
+.workspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  background: var(--bg);
+}
+
+.pane-column {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pane-column > .pane {
+  flex-basis: 0;
+  min-height: 0;
+}
+
+/* The line between two columns or two panes, to drag. The line is 1px; `::before` is the wider strip that takes the pointer. */
+.pane-divider {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  background: var(--pane-divider);
+}
+
+.pane-divider[aria-orientation="vertical"] {
+  width: 1px;
+  cursor: col-resize;
+}
+
+.pane-divider[aria-orientation="horizontal"] {
+  height: 1px;
+  cursor: row-resize;
+}
+
+.pane-divider::before,
+.pane-divider::after {
+  content: "";
+  position: absolute;
+}
+
+.pane-divider[aria-orientation="vertical"]::before {
+  inset: 0 -3px;
+}
+
+.pane-divider[aria-orientation="horizontal"]::before {
+  inset: -3px 0;
+}
+
+.pane-divider::after {
+  inset: 0;
+  outline: 1px solid var(--accent);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.pane-divider:hover::after,
+.pane-divider:active::after {
+  opacity: 1;
+}
+
+/* In a narrow pane the status bar keeps to one line and loses its left end. */
+.pane .status-bar {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.pane .status-bar > * {
+  flex: none;
+}
+
+/* A pane's tabs. The strip's bottom line is a shadow, so the tab that shows covers it and joins the pane. */
+.tab-strip {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--tab-height);
+  padding: 0 6px 0 8px;
+  background: var(--tab-strip-bg);
+  box-shadow: inset 0 -1px 0 var(--border);
+  user-select: none;
+}
+
+/* A menu opened from a pane's strip or header lies over everything, the sidebars too. */
+.tab-strip:has(.menu),
+.pane-header:has(.menu) {
+  z-index: 200;
+}
+
+/* The tabs shrink while there is room for all of them, then the strip scrolls sideways. */
+.tabs {
+  align-self: stretch;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  flex: 0 1 auto;
+  width: var(--tab-width);
+  min-width: 96px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: calc(var(--tab-height) - 6px);
+  padding: 0 6px 0 12px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--tab-text);
+  cursor: default;
+  transition: background var(--transition), color var(--transition);
+}
+
+.tab:hover,
+.tab.has-menu {
+  background: var(--bg-hover);
+  color: var(--tab-active-text);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* The tab that shows: on the note's surface, with a hairline round its top and sides. */
+.tab.is-active {
+  background: var(--tab-active-bg);
+  box-shadow: inset 1px 0 0 var(--border), inset -1px 0 0 var(--border), inset 0 1px 0 var(--border);
+  color: var(--tab-active-text);
+  font-weight: 500;
+}
+
+/* With more than one pane, the active pane's tab has a line over it and the other panes' tabs are quieter. */
+.workspace.is-split .pane.is-active .tab.is-active::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--tab-active-mark);
+}
+
+.workspace.is-split .pane:not(.is-active) .tab.is-active {
+  color: var(--tab-text);
+}
+
+.tab-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* A tab's cross: there on the tab that shows, and on the others under the pointer or with the focus, so their names get the room. */
+.tab-close {
+  flex: none;
+  display: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  transition: background var(--transition), color var(--transition);
+}
+
+.tab:hover .tab-close,
+.tab:focus-within .tab-close,
+.tab.is-active .tab-close {
+  display: grid;
+}
+
+.tab-close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* Where a dragged tab would go: a line at the tab's left or right edge. */
+.tab.is-drop-before::after,
+.tab.is-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.tab.is-drop-before::after {
+  left: -2px;
+}
+
+.tab.is-drop-after::after {
+  right: -2px;
+}
+
+.is-dragging-tab,
+.is-dragging-tab * {
+  cursor: grabbing !important;
+}
+
+/* The right sidebar: the sidebar's look, mirrored. */
+.sidebar.is-right {
+  width: var(--right-sidebar-width);
+  border-right: 0;
+  border-left: 1px solid var(--border);
+}
+
+.sidebar.is-right .sidebar-resizer {
+  right: auto;
+  left: -3px;
+}
+
+/* The outline: one row per heading, pushed in by its level. Long headings wrap. */
+.outline-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outline-item {
+  display: block;
+  width: 100%;
+  min-height: var(--row-height);
+  padding: 4px 8px 4px calc(8px + var(--outline-level, 0) * 14px);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  line-height: 20px;
+  text-align: left;
+  overflow-wrap: anywhere;
+  transition: background var(--transition), color var(--transition);
+}
+
+.outline-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* The heading the cursor is in. */
+.outline-item.is-current {
+  background: var(--bg-active);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.outline-empty {
+  margin: 0;
+  padding: 4px 8px;
+  color: var(--text-muted);
+}
+
+/* Over a pane: Back and Forward on the left, where the note is in the middle, the pane's buttons on the right. */
+.pane-header {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  height: var(--header-height);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.pane-nav,
+.pane-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.pane-actions {
+  justify-content: flex-end;
+}
+
+/* The folders a note is in, then its name. */
+.pane-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.breadcrumb-slash {
+  margin: 0 6px;
+  color: var(--text-faint);
+}
+
+.breadcrumb-name {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Under a pane: counts and the editor's mode. */
+.status-bar {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  height: var(--status-height);
+  padding: 0 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.status-backlinks {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.status-backlinks:hover:enabled,
+.status-backlinks:focus-visible {
+  color: var(--text);
+}
+
+.status-backlinks:disabled {
+  cursor: default;
+}
+
+/* The pane with no note: a mark and a short list of ways to start. */
+.empty {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.empty-mark {
+  color: var(--text-faint);
+}
+
+.empty-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+/* A pane with a file that is not text: a line that says so and a button, or the picture, as large as fits. */
+.attachment {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  color: var(--text-muted);
+}
+
+.attachment-text {
+  margin: 0;
+  font-size: 15px;
+}
+
+.attachment img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.start-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 280px;
+}
+
+.start-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  text-align: left;
+  transition: background var(--transition), color var(--transition);
+}
+
+.start-item span:not(.keys) {
+  flex: 1;
+}
+
+.start-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* File tree. A nested list is one folder's content, with a guide line down its left. */
+.tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree .tree {
+  margin-left: 13px;
+  padding-left: 4px;
+  border-left: 1px solid var(--border);
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: var(--row-height);
+  padding: 0 8px 0 6px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  text-align: left;
+  transition: background var(--transition), color var(--transition);
+}
+
+.tree-item:hover,
+.tree-item.has-menu {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.tree-item.is-active {
+  background: var(--bg-active);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.tree-folder {
+  color: var(--text);
+}
+
+/* A folder's arrow, which turns when the folder is open. In a file's row the same box holds the icon of its kind, if it has one. */
+.tree-arrow {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+  transition: transform var(--transition);
+}
+
+.tree-folder[aria-expanded="true"] .tree-arrow {
+  transform: rotate(90deg);
+}
+
+.tree-kind {
+  color: var(--text-muted);
+}
+
+.tree-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The whole list. It fills the sidebar, so the empty space under the rows is the vault root to drop on. */
+.tree-root {
+  min-height: 100%;
+  border-radius: var(--radius);
+  transition: background var(--transition);
+}
+
+/* While a row is dragged: the row itself, the folder it would land in (the list itself for the vault root), and its name at the pointer. */
+.tree-root.is-dragging,
+.tree-root.is-dragging .tree-item {
+  cursor: grabbing;
+}
+
+.tree-item.is-dragged {
+  opacity: 0.5;
+}
+
+.tree-root.is-drop-target,
+.tree-item.is-drop-target {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.tree-ghost {
+  position: fixed;
+  z-index: 300;
+  max-width: 240px;
+  margin: 10px 0 0 12px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+  line-height: calc(var(--row-height) - 2px);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* The search box at the top of the sidebar. */
+.sidebar .search-input {
+  height: 28px;
+  margin: 2px 0 8px;
+  padding: 0 8px;
+  user-select: text;
+}
+
+/*
+ * A popup menu (components/Menu.tsx): a context menu, a "more" menu, the list of a select.
+ * The backdrop covers the window, so a click anywhere else closes the menu.
+ */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+
+.menu {
+  position: fixed;
+  min-width: 190px;
+  max-width: 320px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  user-select: none;
+  animation: pop-in 80ms ease-out;
+}
+
+/* The item under the pointer has the focus, so pointer and arrow keys highlight the same way. */
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-s);
+  text-align: left;
+}
+
+.menu-item:focus,
+.menu-item:focus-visible {
+  outline: none;
+  background: var(--bg-active);
+}
+
+.menu-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  color: var(--text-muted);
+}
+
+.menu-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.menu-item.is-danger,
+.menu-item.is-danger .menu-icon {
+  color: var(--error);
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+/* No motion for who asked for none, and none while the window is hidden (see `is-hidden` in App.tsx). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+:root.is-hidden *,
+:root.is-hidden *::before,
+:root.is-hidden *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Editor */
+.editor {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor .cm-editor {
+  height: 100%;
+}
+
+.editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+.editor .cm-scroller {
+  font: var(--font-size-text) / var(--line-height-text) var(--font-text);
+  overflow: auto;
+}
+
+/* Thin scrollbars for the note and the boxes inside it that scroll. */
+.editor .cm-scroller::-webkit-scrollbar,
+.md-table-scroll::-webkit-scrollbar,
+.backlinks .hits::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.editor .cm-scroller::-webkit-scrollbar-thumb,
+.md-table-scroll::-webkit-scrollbar-thumb,
+.backlinks .hits::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 5px;
+  background: var(--scrollbar-thumb) content-box;
+}
+
+.editor .cm-scroller::-webkit-scrollbar-thumb:hover,
+.md-table-scroll::-webkit-scrollbar-thumb:hover,
+.backlinks .hits::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+/* The text column: `--line-width` wide, centred, with `--editor-padding` at its sides. */
+.editor .cm-content {
+  position: relative;
+  width: 100%;
+  max-width: calc(var(--line-width) + 2 * var(--editor-padding));
+  margin: 0 auto;
+  padding: 32px var(--editor-padding) 40vh;
+  caret-color: var(--caret-color);
+}
+
+/*
+ * A line's left padding is the sum of what its blocks ask for (a quote's bar, a list's indent),
+ * so a list in a quote gets both. The first line of a list item is pulled back by `--line-hang`.
+ */
+.editor .cm-line {
+  padding: 0 0 0 calc(var(--line-quote, 0px) + var(--line-list, 0px));
+  text-indent: calc(-1 * var(--line-hang, 0px));
+}
+
+.editor .cm-cursor {
+  border-left: 1.5px solid var(--caret-color);
+}
+
+.editor .cm-selectionBackground,
+.editor .cm-focused .cm-selectionBackground {
+  background: var(--selection-bg);
+}
+
+/* CodeMirror draws the selection in a layer under the text, where a line with a background of its own (code)
+   covers it, and as wide as the pane. Here the layer is above the text, which a translucent `--selection-bg`
+   lets through, and is cut to the text column: `--editor-padding` in from the sides of the centred content. */
+.editor .cm-scroller > .cm-selectionLayer {
+  z-index: 1 !important;
+  width: 100%;
+  pointer-events: none;
+  clip-path: inset(
+    -100000px calc(max(0px, (100% - var(--line-width) - 2 * var(--editor-padding)) / 2) + var(--editor-padding) - 3px)
+  );
+}
+
+/* Markdown syntax, from CodeMirror's class highlighter */
+.tok-heading {
+  color: var(--syntax-heading);
+  font-weight: var(--heading-weight);
+}
+
+.tok-strong {
+  font-weight: 650;
+}
+
+.tok-emphasis {
+  font-style: italic;
+}
+
+.tok-strikethrough {
+  text-decoration: line-through;
+}
+
+.tok-link,
+.tok-url {
+  color: var(--syntax-link);
+}
+
+.tok-monospace {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--syntax-code);
+}
+
+.tok-quote {
+  color: var(--syntax-quote);
+}
+
+.tok-meta,
+.tok-punctuation {
+  color: var(--syntax-meta);
+}
+
+/* Code in a fenced block that names its language (JS, TS, CSS, HTML). */
+.tok-keyword,
+.tok-bool {
+  color: var(--syntax-keyword);
+}
+
+.tok-string,
+.tok-string2 {
+  color: var(--syntax-string);
+}
+
+.tok-number,
+.tok-literal {
+  color: var(--syntax-number);
+}
+
+.tok-typeName,
+.tok-className,
+.tok-namespace {
+  color: var(--syntax-type);
+}
+
+.tok-variableName.tok-definition,
+.tok-macroName,
+.tok-labelName {
+  color: var(--syntax-function);
+}
+
+.tok-propertyName {
+  color: var(--syntax-property);
+}
+
+.tok-comment {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+
+.tok-operator,
+.md-codeblock .tok-punctuation {
+  color: var(--syntax-punctuation);
+}
+
+/*
+ * Live Preview: classes added by src/components/livePreview.ts, on lines
+ * (`.cm-line.md-*`) and on spans inside them. Source mode has none of these.
+ * The editor's root has `is-live-preview` or `is-source`.
+ */
+
+/* The note's name, drawn in the top padding of a note that has no title of its own. One line, so the padding can make room for it. */
+.editor .cm-content[data-title] {
+  padding-top: calc(32px + var(--heading-1-size) * var(--heading-line-height) + var(--line-height-text) * 1em);
+}
+
+.editor .cm-content[data-title]::before {
+  content: attr(data-title);
+  position: absolute;
+  top: 32px;
+  left: var(--editor-padding);
+  right: var(--editor-padding);
+  overflow: hidden;
+  color: var(--inline-title-text);
+  font-size: var(--heading-1-size);
+  font-weight: var(--heading-1-weight);
+  line-height: var(--heading-line-height);
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.editor .md-heading {
+  padding-top: var(--heading-space);
+  font-weight: var(--heading-weight);
+  line-height: var(--heading-line-height);
+}
+
+/* The first line of the note needs no space over it. */
+.editor .md-heading:first-child,
+.editor .md-props + .md-heading {
+  padding-top: 0;
+}
+
+.md-heading .tok-heading {
+  font-weight: inherit;
+}
+
+.editor .md-heading-1 {
+  font-size: var(--heading-1-size);
+  font-weight: var(--heading-1-weight);
+  letter-spacing: -0.015em;
+}
+
+.md-heading-2 {
+  letter-spacing: -0.01em;
+}
+
+.md-heading-6 .tok-heading {
+  color: var(--heading-6-text);
+}
+
+.md-heading-2 {
+  font-size: var(--heading-2-size);
+}
+
+.md-heading-3 {
+  font-size: var(--heading-3-size);
+}
+
+.md-heading-4 {
+  font-size: var(--heading-4-size);
+}
+
+.md-heading-5 {
+  font-size: var(--heading-5-size);
+}
+
+.md-heading-6 {
+  font-size: var(--heading-6-size);
+}
+
+/*
+ * Frontmatter. With the cursor in it, it is the YAML as written (`md-frontmatter-source`). With the
+ * cursor outside, plain keys and values are a properties block (`md-props`, below) and any other
+ * YAML keeps the raw look (`md-frontmatter`).
+ */
+.md-frontmatter,
+.md-frontmatter-source {
+  font-family: var(--font-mono);
+  font-size: var(--frontmatter-size);
+  color: var(--frontmatter-text);
+}
+
+.md-frontmatter {
+  background: var(--frontmatter-bg);
+}
+
+/*
+ * The properties block: a row (`md-props-row`) per key, the key in a column of its own and the
+ * values beside it. A list's values are pills that wrap; `md-props-tags` is the tags row. A
+ * hairline under the block parts it from the text.
+ */
+.md-props {
+  display: grid;
+  grid-template-columns: minmax(5em, max-content) 1fr;
+  gap: 6px 20px;
+  /* A key sits on the text line of its first value, pill or not. */
+  align-items: baseline;
+  /* Padding, not a margin: the editor measures a block without its margins. */
+  padding-bottom: 20px;
+  color: var(--text);
+  font: var(--props-size) / 1.6 var(--font-ui);
+  cursor: text;
+}
+
+/* Under the note's own title. */
+.md-heading + .md-props {
+  padding-top: 14px;
+  padding-bottom: 0;
+}
+
+.md-props::after {
+  content: "";
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.md-props-row {
+  display: contents;
+}
+
+.md-props-key {
+  color: var(--props-key-text);
+}
+
+.md-props-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Pills hang out to the left by their padding, so their text starts where a plain value's does. */
+.md-props-values:has(.md-props-pill) {
+  margin-left: -8px;
+}
+
+/* A key with no value. */
+.md-props-values.is-empty::before {
+  content: "\2014";
+  color: var(--text-faint);
+}
+
+.md-props-pill {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--props-pill-bg);
+}
+
+.md-props-tags .md-props-pill {
+  background: var(--props-tag-bg);
+  color: var(--props-tag-text);
+}
+
+/*
+ * A rendered link: `data-link` holds the wikilink text or the URL. A link to a note (`md-wikilink`) is
+ * coloured text, dimmer when the note does not exist (`is-unresolved`). A web link (`md-external-link`)
+ * is underlined and ends in an arrow.
+ */
+.md-link {
+  color: var(--link-text);
+  text-decoration: underline transparent 1px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+/* The highlighter's own link colour gives way to the rendered link's. */
+.md-link .tok-link,
+.md-link .tok-url {
+  color: inherit;
+}
+
+.md-link:hover {
+  text-decoration-color: currentColor;
+}
+
+.md-wikilink.is-unresolved {
+  color: var(--link-unresolved-text);
+}
+
+.md-external-link {
+  color: var(--link-external-text);
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+.md-external-link::after {
+  content: "↗";
+  /* Keeps the underline off the arrow. */
+  display: inline-block;
+  margin-left: 0.15em;
+  text-indent: 0;
+  font-size: 0.7em;
+  vertical-align: 0.3em;
+}
+
+.md-inline-code {
+  padding: 0.14em 0.4em;
+  border-radius: 0.35em;
+  background: var(--code-bg);
+}
+
+/*
+ * Lists. `md-list-line` is a line of a list item, with `--list-depth` (1 for the outer list) set on it.
+ * The marker and the space after it are a box `--list-marker-width` wide, so the text of an item starts
+ * at the same place on every line, also when it wraps.
+ */
+.editor .md-list-line {
+  --line-hang: calc(var(--list-marker-width) + (var(--list-depth) - 1) * var(--list-indent));
+  --line-list: var(--line-hang);
+}
+
+.md-list-marker,
+.md-list-indent {
+  display: inline-block;
+  text-indent: 0;
+  white-space: pre;
+}
+
+.md-list-marker {
+  width: var(--list-marker-width);
+}
+
+/* The spaces before a nested item's marker: as wide as the levels above it. */
+.md-list-indent {
+  width: calc((var(--list-depth) - 1) * var(--list-indent));
+}
+
+.md-list-number {
+  color: var(--list-number-text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* The `-`, `*` or `+` of a list item stays in the text, invisible, under a drawn bullet. */
+.md-list-bullet,
+.md-list-bullet span {
+  position: relative;
+  color: transparent;
+}
+
+.md-list-bullet::before {
+  content: "";
+  position: absolute;
+  left: calc(100% - 0.8em);
+  top: 50%;
+  width: var(--bullet-size);
+  height: var(--bullet-size);
+  margin: calc(var(--bullet-size) / -2);
+  border-radius: 50%;
+  background: var(--bullet-color);
+}
+
+/* Every second level has a ring for a bullet. */
+.md-list-even .md-list-bullet::before {
+  border: 1px solid var(--bullet-color);
+  background: none;
+}
+
+/* A task's checkbox, in the marker's box in place of `- [ ] `. */
+.md-task {
+  text-indent: 0;
+}
+
+.md-task-checkbox {
+  appearance: none;
+  position: relative;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+  margin: 0 0.25em 0 0;
+  border: 1.5px solid var(--checkbox-border);
+  border-radius: 0.3em;
+  font-size: inherit;
+  vertical-align: -0.14em;
+  cursor: pointer;
+}
+
+.md-task-checkbox:hover {
+  border-color: var(--checkbox-color);
+}
+
+.md-task-checkbox:checked {
+  border-color: var(--checkbox-color);
+  background: var(--checkbox-color);
+}
+
+/* In the marker's box the checkbox stands where a bullet would. */
+.md-list-marker .md-task-checkbox {
+  margin: 0 0 0 0.5em;
+}
+
+/* The tick: two sides of a small box, turned. */
+.md-task-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: 0.26em;
+  height: 0.52em;
+  border: solid var(--checkbox-check);
+  border-width: 0 0.12em 0.12em 0;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.md-task-done {
+  color: var(--task-done-text);
+}
+
+.editor .cm-line.md-blockquote {
+  --line-quote: var(--blockquote-indent);
+  border-left: var(--blockquote-bar-width) solid var(--blockquote-bar);
+  color: var(--blockquote-text);
+}
+
+/* A horizontal rule: its `---` stays in the text, invisible, under a drawn line. */
+.md-hr,
+.md-hr span {
+  position: relative;
+  color: transparent;
+}
+
+.md-hr::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid var(--rule-color);
+}
+
+/* Fenced and indented code blocks. `md-codeblock-fence` is a ``` line. */
+.md-codeblock,
+.md-table {
+  font-family: var(--font-mono);
+  font-size: var(--code-size);
+}
+
+.editor .md-codeblock {
+  padding: 0 var(--code-block-padding);
+  background: var(--code-bg);
+  line-height: 1.55;
+}
+
+.md-codeblock .tok-monospace {
+  font-size: inherit;
+  color: inherit;
+}
+
+/* The block's first and last line round its corners. */
+.editor .md-codeblock-begin {
+  position: relative;
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+}
+
+.editor .md-codeblock-end {
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+}
+
+.md-codeblock-fence,
+.md-codeblock-fence span {
+  color: var(--code-fence-text);
+}
+
+/* A ``` line with the cursor outside the block: its text is hidden and it is the block's padding. */
+.editor .md-codeblock-fence.is-collapsed {
+  height: calc(var(--code-block-padding) * 0.75);
+  line-height: 0;
+}
+
+/* A first or last line that shows its text (code, or a ``` line with the cursor in the block) has padding of its own. */
+.editor .md-codeblock-begin:not(.is-collapsed) {
+  padding-top: calc(var(--code-block-padding) * 0.5);
+}
+
+.editor .md-codeblock-end:not(.is-collapsed) {
+  padding-bottom: calc(var(--code-block-padding) * 0.5);
+}
+
+/* The block's top right corner: the language's name and the Copy button. */
+.md-codeblock-tools {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--code-fence-text);
+  font: calc(var(--font-size-ui) - 2px) / 1 var(--font-ui);
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.md-codeblock-lang {
+  pointer-events: none;
+}
+
+.md-codeblock-copy {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--radius) - 2px);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.md-codeblock-copy:hover,
+.md-codeblock-copy:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.md-codeblock-copy.is-copied {
+  color: var(--accent);
+}
+
+.md-image {
+  display: inline-block;
+  max-width: 100%;
+  max-height: var(--image-max-height);
+  border-radius: var(--radius);
+  vertical-align: bottom;
+}
+
+/* An image that could not be loaded shows its alt text. */
+.md-image-missing {
+  color: var(--text-muted);
+  font-size: var(--font-size-ui);
+}
+
+/* A file drawn in place of its `![[link]]` by a module, e.g. an Excalidraw drawing. A click opens the file. */
+.md-embed {
+  display: block;
+  padding: 16px 16px 0;
+  border: 1px solid var(--embed-border);
+  border-radius: var(--radius);
+  background: var(--embed-bg);
+  text-indent: 0;
+  cursor: pointer;
+  color: var(--text-muted);
+  font: var(--font-size-ui) / 1.4 var(--font-ui);
+}
+
+/* The caption: the file's name, and an arrow that says a click opens it. */
+.md-embed::after {
+  content: attr(data-link) " ↗";
+  display: block;
+  padding: 10px 0;
+}
+
+.md-embed:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.md-embed svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: var(--image-max-height);
+  margin: 0 auto;
+}
+
+/*
+ * A table in Live Preview, drawn by the tables module in place of its lines: a `table` with `th`
+ * header cells and `td` cells. The cell being edited has the focus.
+ */
+.md-table-block {
+  position: relative;
+  padding: 6px 0;
+  font-size: var(--table-size);
+  line-height: 1.5;
+}
+
+/* The table's frame. A table wider than the note scrolls sideways in here. */
+.md-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--table-border);
+  border-radius: var(--radius);
+  vertical-align: top;
+}
+
+/* The frame draws the outer border, the cells the lines between them. */
+.md-table-block table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.md-table-block th,
+.md-table-block td {
+  min-width: 3em;
+  padding: var(--table-cell-padding);
+  border: solid var(--table-border);
+  border-width: 0 1px 1px 0;
+  text-align: left;
+  vertical-align: top;
+  /* Spaces show as typed while a cell is edited. Words stay whole, so a table with many columns scrolls and is not squeezed. */
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  cursor: text;
+}
+
+.md-table-block th:last-child,
+.md-table-block td:last-child {
+  border-right-width: 0;
+}
+
+.md-table-block tbody tr:last-child td {
+  border-bottom-width: 0;
+}
+
+.md-table-block th {
+  background: var(--table-header-bg);
+  font-weight: 600;
+}
+
+.md-table-block tbody tr:hover td {
+  background: var(--table-row-hover);
+}
+
+/* The cell being edited. */
+.md-table-block th:focus,
+.md-table-block td:focus,
+.md-table-block tbody tr:hover td:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 3px;
+  background: var(--bg);
+}
+
+/* An empty cell is as high as a line of text. */
+.md-table-block th:empty::after,
+.md-table-block td:empty::after {
+  content: "\200b";
+}
+
+/*
+ * Buttons for the table's structure, floating over its top left corner while one of its cells has
+ * the focus: in the empty line that stands over a table. `md-table-tools-group` is a group of buttons.
+ */
+.md-table-tools {
+  display: none;
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  bottom: calc(100% - 2px);
+  max-width: 100%;
+  flex-wrap: wrap;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--shadow-popover);
+  font: calc(var(--font-size-ui) - 1px) / 1 var(--font-ui);
+  white-space: nowrap;
+}
+
+.md-table-block:focus-within .md-table-tools {
+  display: flex;
+}
+
+.md-table-tools-group {
+  display: flex;
+  gap: 1px;
+}
+
+.md-table-tools-group + .md-table-tools-group {
+  margin-left: 4px;
+  padding-left: 4px;
+  border-left: 1px solid var(--border);
+}
+
+.md-table-tools button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 5px;
+  border: 0;
+  border-radius: calc(var(--radius) - 2px);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.md-table-tools button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.md-table-tools button[data-command^="table.delete"]:hover {
+  color: var(--error);
+}
+
+/*
+ * The Excalidraw canvas, in place of the editor. It is its own stacking context, so Excalidraw's
+ * toolbars and menus stay inside it and under the palette and the settings screen.
+ */
+.drawing {
+  /* The notes panel is placed in it. */
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  isolation: isolate;
+  /* Shows through the canvas of a drawing that has no background colour of its own. */
+  background: var(--bg);
+}
+
+/*
+ * Excalidraw's own controls, in the app's colours: its panels on the sidebar's background and its
+ * highlight in the accent. The class is doubled to come after Excalidraw's `.excalidraw.theme--dark`.
+ */
+.drawing .excalidraw.excalidraw {
+  --color-primary: var(--accent);
+  --color-primary-darker: color-mix(in srgb, var(--accent) 85%, var(--text));
+  --color-primary-darkest: color-mix(in srgb, var(--accent) 70%, var(--text));
+  --color-primary-hover: color-mix(in srgb, var(--accent) 85%, var(--text));
+  --color-primary-light: color-mix(in srgb, var(--accent) 22%, var(--bg));
+  --color-primary-light-darker: color-mix(in srgb, var(--accent) 32%, var(--bg));
+  --color-surface-primary-container: color-mix(in srgb, var(--accent) 22%, var(--bg));
+  --island-bg-color: var(--bg-sidebar);
+  --default-bg-color: var(--bg);
+  --color-surface-lowest: var(--bg);
+  --color-surface-low: var(--bg-hover);
+  --color-surface-mid: var(--bg-hover);
+  --color-surface-high: var(--bg-active);
+  --ui-font: var(--font-ui);
+}
+
+/*
+ * Presenting (View.tsx): the drawing's own canvas is put over the whole window, whichever pane it sits in,
+ * with a small toolbar at the bottom. Over the app, under the command palette and the other dialogs.
+ */
+.drawing.slideshow-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+
+/* Excalidraw's own controls: its menu, zoom buttons and help. */
+.slideshow-canvas .layer-ui__wrapper {
+  display: none;
+}
+
+/*
+ * At the canvas's top right, shaped like Excalidraw's buttons beside it: present, more ways to present (a menu),
+ * and the notes of the selected frame.
+ */
+.slideshow-start {
+  display: flex;
+  height: var(--lg-button-size, 36px);
+  border-radius: var(--radius-l);
+  background: var(--bg-sidebar);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-popover);
+}
+
+.slideshow-start button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--lg-button-size, 36px);
+  border-radius: var(--radius-l);
+}
+
+/* The arrow that opens the menu belongs to the button before it. */
+.slideshow-start button[aria-haspopup] {
+  min-width: 0;
+  margin-left: -8px;
+  padding: 0 6px 0 2px;
+}
+
+.slideshow-start button:hover {
+  color: var(--text);
+}
+
+/*
+ * The layer over the canvas in which a build that slides or zooms moves a picture of its elements (View.tsx).
+ * It cuts off what is outside the window, where a picture that slides starts or ends.
+ */
+.slideshow-build {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* One picture, at the place and size the canvas draws its elements. */
+.slideshow-build > div {
+  position: absolute;
+}
+
+.slideshow-build svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* The panel that edits a frame's presenter notes, under the buttons at the canvas's top right. */
+.slideshow-notes {
+  position: absolute;
+  top: 64px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(380px, calc(100% - 32px));
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+}
+
+.slideshow-notes header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.slideshow-notes header span {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slideshow-notes textarea {
+  height: 180px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: var(--font-size-ui) / 1.5 var(--font-text);
+  resize: vertical;
+}
+
+.slideshow-notes textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.slideshow-notes footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slideshow-notes small {
+  flex: 1;
+  color: var(--text-faint);
+}
+
+/* The capture box, alone in its own small window (src/modules/capture/Box.tsx): one text field that fills it. */
+.capture-box {
+  width: 100%;
+  height: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  outline: none;
+  resize: none;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: 15px/1.45 var(--font-ui);
+}
+
+.capture-box::placeholder {
+  color: var(--text-faint);
+}
+
+/*
+ * The presenter view, alone in its own window (Presenter.tsx): a header with where the slideshow is and the time,
+ * the slide now and what comes next on the left, the notes large on the right, the buttons at the bottom.
+ */
+.presenter {
+  display: grid;
+  grid-template: auto minmax(0, 1fr) auto / minmax(260px, 2fr) 3fr;
+  gap: 20px 28px;
+  height: 100%;
+  padding: 20px 28px;
+  background: var(--bg-sidebar);
+}
+
+.presenter-idle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.presenter-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.presenter-where {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+
+.presenter-count {
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.presenter small {
+  color: var(--text-muted);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.presenter-title {
+  overflow: hidden;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One dot per build of the slide; the ones that have run are filled. */
+.presenter-builds {
+  display: flex;
+  gap: 5px;
+  align-self: center;
+}
+
+.presenter-builds i {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--text-faint);
+  border-radius: 50%;
+}
+
+.presenter-builds i.is-done {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.presenter-time {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.presenter-slides {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.presenter-slides figure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  margin: 0;
+}
+
+.presenter-slides figcaption {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The slide now is marked with the accent; what comes next is smaller and plain. */
+.presenter-now {
+  flex: 3 1 0;
+}
+
+.presenter-next {
+  flex: 2 1 0;
+}
+
+.presenter-now figcaption {
+  color: var(--accent);
+}
+
+.presenter-picture {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.presenter-now .presenter-picture {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.presenter-picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.presenter-notes {
+  padding: 20px 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg);
+  font: 22px / 1.5 var(--font-text);
+  overflow-y: auto;
+  user-select: text;
+}
+
+.presenter-notes > :first-child {
+  margin-top: 0;
+}
+
+.presenter-notes p,
+.presenter-notes ul,
+.presenter-notes ol,
+.presenter-notes pre {
+  margin: 0 0 0.7em;
+}
+
+/* A paragraph keeps its line breaks. */
+.presenter-notes p {
+  white-space: pre-wrap;
+}
+
+.presenter-notes h1,
+.presenter-notes h2,
+.presenter-notes h3 {
+  margin: 1em 0 0.4em;
+  font-size: 1.15em;
+  line-height: 1.3;
+}
+
+.presenter-notes ul,
+.presenter-notes ol {
+  padding-left: 1.3em;
+}
+
+.presenter-notes li {
+  margin: 0.2em 0;
+}
+
+.presenter-notes code,
+.presenter-notes pre {
+  border-radius: var(--radius-s);
+  background: var(--bg-hover);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+.presenter-notes code {
+  padding: 0.1em 0.3em;
+}
+
+.presenter-notes pre {
+  padding: 0.6em 0.8em;
+  white-space: pre-wrap;
+}
+
+.presenter-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.presenter-none {
+  color: var(--text-faint);
+}
+
+.presenter-foot {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+}
+
+.presenter-foot .button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+.presenter-spring {
+  flex: 1;
+}
+
+/*
+ * Previous, the slide picker, next, fullscreen, end.
+ * No `transform` here: the picker's menu is `position: fixed` inside it.
+ *
+ * It does not sit over the slides: it is see-through, and shown while the pointer is on or near its place, while a
+ * control in it has the keyboard focus, and while its picker is open. It is also shown for the first two seconds
+ * of a slideshow, so the presenter sees where it is.
+ */
+.slideshow-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: fit-content;
+  max-width: calc(100% - 12px);
+  margin: 0 auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-muted);
+  opacity: 0;
+  /* It stays a moment after the pointer has left, then fades. */
+  transition: opacity 300ms 600ms;
+  animation: slideshow-bar-intro 2.4s;
+}
+
+/* Room around the toolbar that counts as it for the pointer, behind its buttons, so it shows before the pointer is on it. */
+.slideshow-bar::before {
+  content: "";
+  position: absolute;
+  inset: -40px -60px -16px;
+  z-index: -1;
+}
+
+.slideshow-bar:hover,
+.slideshow-bar:has(:focus-visible),
+.slideshow-bar:has([aria-expanded="true"]) {
+  opacity: 1;
+  transition: opacity 120ms;
+  animation: none;
+}
+
+@keyframes slideshow-bar-intro {
+  from,
+  85% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.slideshow-bar > button {
+  display: flex;
+  padding: 6px;
+  border-radius: var(--radius);
+}
+
+.slideshow-bar > button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* The picker, without the box of a select in a form. */
+.slideshow-bar .select {
+  min-width: 0;
+  max-width: 40vw;
+  border: 0;
+  background: none;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.slideshow-bar .select:hover {
+  background: var(--bg-hover);
+}
+
+.slideshow-bar .select span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slideshow-bar-rule {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+/* Graph view: a canvas over the whole pane, with the filter field on top of it. */
+.graph {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--graph-bg);
+}
+
+.graph canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* The canvas draws its labels in this colour and font. */
+  color: var(--graph-label);
+  font: var(--graph-label-size) var(--font-ui);
+}
+
+/* The filter field with its icon, floating in the graph's top left corner. */
+.graph-controls {
+  position: absolute;
+  z-index: 1;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 15rem;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+.graph-controls:focus-within {
+  border-color: var(--accent);
+}
+
+.graph-controls svg {
+  flex: none;
+}
+
+.graph .graph-filter {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+}
+
+.graph .graph-filter::placeholder {
+  color: var(--text-muted);
+}
+
+/*
+ * Dialogs: the command palette, the note switcher, the text prompts, the question before a delete and
+ * the settings screen. Each is a box on the elevated surface, over a backdrop that dims the window.
+ */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh 16px 0;
+  background: var(--backdrop);
+}
+
+.palette,
+.confirm {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-dialog);
+  animation: pop-in 100ms ease-out;
+}
+
+.palette {
+  max-width: 600px;
+  overflow: hidden;
+}
+
+.palette-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: 15px var(--font-ui);
+}
+
+.palette-input::placeholder,
+.settings input::placeholder,
+.search-input::placeholder {
+  color: var(--text-faint);
+}
+
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: min(50vh, 400px);
+  overflow-y: auto;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--radius);
+  text-align: left;
+}
+
+.palette-item.is-selected {
+  background: var(--bg-active);
+}
+
+/* The icon of a kind of file before its name: a drawing in the switcher. */
+.palette-icon {
+  display: flex;
+  flex: none;
+  margin-right: -4px;
+  color: var(--text-muted);
+}
+
+.palette-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Muted text at a row's right: the folder a note is in. */
+.palette-hint {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.palette-empty {
+  padding: 24px 8px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Under the box: the keys that work in it. */
+.palette-footer {
+  display: flex;
+  gap: 16px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  user-select: none;
+}
+
+.palette-footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A yes-or-no question (components/Menu.tsx, `Confirm`). */
+.confirm {
+  max-width: 380px;
+  margin-top: 6vh;
+  padding: 20px;
+}
+
+.confirm-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.confirm-message {
+  margin: 0 0 20px;
+  color: var(--text-muted);
+}
+
+.confirm-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/*
+ * Settings screen: a wider dialog with the sections down its left and the chosen one on the right.
+ * `.settings-body` is the only part that scrolls.
+ */
+.settings {
+  display: flex;
+  max-width: 860px;
+  height: min(620px, 76vh);
+  outline: none;
+}
+
+.settings-nav {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 200px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  overflow-y: auto;
+  user-select: none;
+}
+
+.settings-nav-title,
+.settings h3 {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.settings-nav-title {
+  padding: 4px 10px 8px;
+}
+
+.settings-nav button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  text-align: left;
+  transition: background var(--transition), color var(--transition);
+}
+
+.settings-nav button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.settings-nav button.is-active {
+  background: var(--bg-active);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.settings-section {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 10px 0 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settings h3 {
+  margin: 24px 0 0;
+}
+
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 24px 24px;
+}
+
+.settings p {
+  margin: 10px 0;
+}
+
+.settings-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.settings-bad {
+  color: var(--error);
+}
+
+/* One setting: its name and a line about it on the left, its control on the right. `settings-check` is a row with a switch. */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 52px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-label {
+  min-width: 0;
+}
+
+.settings-control {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A value that is shown, not changed: the version, the vault's folder. */
+.settings-value {
+  max-width: 360px;
+  color: var(--text-muted);
+  text-align: right;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* A checkbox drawn as a switch. */
+.settings input[type="checkbox"] {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text-muted) 45%, transparent);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.settings input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  transition: transform var(--transition);
+}
+
+.settings input[type="checkbox"]:checked {
+  background: var(--accent);
+}
+
+.settings input[type="checkbox"]:checked::after {
+  transform: translateX(14px);
+}
+
+.settings input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* A choice between a few: the buttons side by side, the chosen one raised. */
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  transition: background var(--transition), color var(--transition);
+}
+
+.segmented button:hover {
+  color: var(--text);
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--bg-active);
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* The app's own drop-down (components/Menu.tsx, `Select`): a button that opens a menu. */
+.select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 180px;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  transition: background var(--transition);
+}
+
+.select:hover {
+  background: var(--bg-hover);
+}
+
+.select svg {
+  color: var(--text-muted);
+}
+
+/* A text or number field, with its unit after it. */
+.settings-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-field input,
+.settings-search {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.settings-field input {
+  width: 180px;
+}
+
+.settings-field input:focus,
+.settings-search:focus-within,
+.sidebar .search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.settings-field.is-number input {
+  width: 72px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-field input::-webkit-inner-spin-button {
+  display: none;
+}
+
+.settings-field input:disabled {
+  color: var(--text-muted);
+}
+
+.settings-unit {
+  width: 24px;
+  color: var(--text-muted);
+}
+
+/* The accent colours to pick from. The chosen one has a ring. */
+.swatches {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.swatches .settings-field input {
+  width: 88px;
+}
+
+.swatch {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  transition: transform var(--transition);
+}
+
+.swatch:hover {
+  transform: scale(1.12);
+}
+
+/* "No colour of my own": an empty ring. */
+.swatch.is-default {
+  border: 1.5px dashed var(--text-muted);
+}
+
+.swatch[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--bg-elevated),
+    0 0 0 4px var(--text);
+}
+
+/* The filter over the list of hotkeys. */
+.settings-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 4px;
+  color: var(--text-muted);
+}
+
+.settings-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-keys {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* One command: its title, marks for a conflict or a change, its key (a click records a new one), then Unbind and Reset. */
+.settings-keys li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-key-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-keys .settings-bad,
+.settings-keys li > .settings-hint {
+  padding: 1px 6px;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-size: 11px;
+}
+
+.settings-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 72px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: var(--radius);
+  transition: background var(--transition);
+}
+
+.settings-key:hover {
+  background: var(--bg-hover);
+}
+
+.settings-key.is-recording {
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Sidebar search */
+.search-input,
+.graph-filter {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.search-input:focus,
+.graph-filter:focus {
+  border-color: var(--accent);
+}
+
+.search-empty {
+  margin: 0;
+  padding: 3px 8px;
+  color: var(--text-muted);
+}
+
+/* Search results and backlinks: a note name with the matching line under it */
+.hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hit {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  text-align: left;
+}
+
+.hit:hover {
+  background: var(--bg-hover);
+}
+
+.hit-note {
+  display: block;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The folder the note is in, after its name. */
+.hit-folder {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-size: 0.92em;
+  font-weight: 400;
+}
+
+/* The matching line: two lines of it at most, whatever the width. */
+.hit-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin-top: 1px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* What matched in the line: the search text, or the link to the open note. */
+.hit-text mark {
+  border-radius: 2px;
+  background: var(--hit-mark-bg);
+  color: var(--hit-mark-text);
+}
+
+/*
+ * Backlinks: the list of lines that link to the note. It scrolls on its own and shows when the
+ * status bar's backlink count is clicked. These rules do not depend on where the panel is.
+ */
+.backlinks {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.backlinks[hidden] {
+  display: none;
+}
+
+.backlinks .hits {
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+/* Under the editor: a line over it, and its content in the note's text column. */
+.pane .backlinks {
+  flex: none;
+  border-top: 1px solid var(--border);
+}
+
+.pane .backlinks > * {
+  width: 100%;
+  max-width: calc(var(--line-width) + 2 * var(--editor-padding));
+  margin: 0 auto;
+  padding-left: var(--editor-padding);
+  padding-right: var(--editor-padding);
+}
+
+.pane .backlinks .hits {
+  max-height: var(--backlinks-max-height);
+}
+
+/* A row's hover box reaches past the column, so its text stays in line with the note's. */
+.pane .backlinks .hit {
+  width: calc(100% + 16px);
+  margin: 0 -8px;
+}
+
+/*
+ * A comparison of two texts (components/DiffView.tsx): one row per line, with a sign column. Removed lines
+ * are from the older text, added lines from the newer one.
+ */
+.diff {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg);
+  font-size: var(--diff-size);
+  line-height: 1.5;
+  overflow: hidden;
+  user-select: text;
+}
+
+.diff-line {
+  display: flex;
+  padding: 0 6px 0 0;
+}
+
+.diff-sign {
+  flex: none;
+  width: 16px;
+  color: var(--text-muted);
+  text-align: center;
+  user-select: none;
+}
+
+.diff-text {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff-line.is-add {
+  background: var(--diff-added-bg);
+}
+
+.diff-line.is-add .diff-sign {
+  color: var(--diff-added-mark);
+}
+
+.diff-line.is-remove {
+  background: var(--diff-removed-bg);
+}
+
+.diff-line.is-remove .diff-sign {
+  color: var(--diff-removed-mark);
+}
+
+/* A run of unchanged lines, folded. A click opens it. */
+.diff-fold {
+  display: block;
+  width: 100%;
+  padding: 2px 6px 2px 16px;
+  background: var(--bg-sidebar);
+  color: var(--diff-fold-text);
+  font-size: 11px;
+  text-align: left;
+}
+
+.diff-fold:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.diff-empty {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* The history panel in the right sidebar: the list of versions, and under it the comparison with the picked one. */
+.history-list {
+  max-height: 40vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.history-item {
+  display: block;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  line-height: 18px;
+  text-align: left;
+  transition: background var(--transition), color var(--transition);
+}
+
+.history-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.history-item.is-selected {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+/* The date and the author on one line, the commit's subject under them. */
+.history-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.history-author {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.history-subject {
+  display: block;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.history-compare {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.history-compare-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-left: 8px;
+}
+
+.history-compare-title {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.history-empty {
+  margin: 0;
+  padding: 4px 8px;
+  color: var(--text-muted);
+}
+
+/* The history margin (`history.blame`): a column left of the text. CodeMirror draws one `blame-mark` per line. */
+.editor .cm-gutters {
+  border: 0;
+  background: transparent;
+  color: var(--blame-text);
+}
+
+.blame-gutter {
+  width: var(--blame-width);
+  font-family: var(--font-ui);
+  font-size: var(--blame-size);
+}
+
+.blame-mark {
+  height: 100%;
+  padding: 0 8px 0 10px;
+  border-left: 2px solid var(--border);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+/* Lines that are not in the last commit: typed since, or saved and not committed. */
+.blame-mark.is-uncommitted {
+  border-left-color: var(--blame-uncommitted);
+  color: var(--blame-uncommitted);
+}
+
+/* The switch at the top of the history panel: the comparison under the list, or in a pane beside the note. */
+.history-where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-left: 8px;
+  color: var(--text-muted);
+}
+
+/*
+ * A comparison with a pane to itself (components/DiffPane.tsx): a header with what is compared, the line
+ * counts and the buttons, over the lines, which scroll.
+ */
+.diff-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-pane-head {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-pane-names {
+  /* Wide enough to read: in a narrow pane the counts and buttons wrap under it. */
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-pane-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.diff-pane-detail {
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.diff-pane-counts,
+.diff-pane-actions {
+  flex: none;
+  display: flex;
+  gap: 8px;
+}
+
+/* Lines added and removed, as `+3` and `−1`. */
+.diff-count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.diff-count.is-add {
+  color: var(--diff-added-mark);
+}
+
+.diff-count.is-remove {
+  color: var(--diff-removed-mark);
+}
+
+.diff-pane-body {
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px;
+  overflow-y: auto;
+}
+
+.diff-pane .button:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+/* The comparison of the history panel in its own pane, before a version is picked. */
+.pane > .history-empty {
+  padding: 16px;
+}
+
+/* The review inbox (modules/review): the notes that wait in a list at the left, the picked one's changes beside it. */
+.review {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  container-type: inline-size;
+}
+
+.review-columns {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+/* In a narrow pane the list goes over the comparison. */
+@container (max-width: 720px) {
+  .review-columns {
+    flex-direction: column;
+  }
+
+  .review-columns > .review-list {
+    width: auto;
+    max-height: 40%;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+.review-empty {
+  margin: 0;
+  padding: 16px;
+  color: var(--text-muted);
+}
+
+.review-list {
+  flex: none;
+  width: var(--review-list-width);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--bg-sidebar);
+}
+
+.review-list-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.review-count {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.review-list ul {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.review-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  line-height: 18px;
+  text-align: left;
+  transition: background var(--transition), color var(--transition);
+}
+
+.review-item:hover {
+  background: var(--bg-hover);
+}
+
+.review-item.is-selected {
+  background: var(--bg-active);
+}
+
+/* The note's name, what happened to it, and the line counts on one line. */
+.review-item-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.review-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.review-status {
+  font-size: 11px;
+}
+
+.review-status.is-added {
+  color: var(--diff-added-mark);
+}
+
+.review-status.is-deleted {
+  color: var(--diff-removed-mark);
+}
+
+.review-folder,
+.review-origin {
+  display: block;
+  font-size: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* A count on the corner of a ribbon button (`RibbonButton.badge`): the notes that wait for review. */
+.ribbon-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font: 600 9px / 14px var(--font-ui);
+  text-align: center;
+  pointer-events: none;
+}
+
+/*
+ * The health and tasks panels in the right sidebar: rows under the name of the note they are in. The
+ * health panel also has a heading with a count per kind of row.
+ */
+.upkeep ul {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.upkeep-head {
+  margin: 10px 8px 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.upkeep-count {
+  margin-left: 4px;
+  font-weight: 400;
+}
+
+.upkeep-note,
+.upkeep-row {
+  display: block;
+  width: 100%;
+  padding: 3px 8px;
+  border-radius: var(--radius);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.upkeep-note {
+  font-weight: 550;
+}
+
+.upkeep-note:hover,
+.upkeep-row:hover {
+  background: var(--bg-hover);
+}
+
+/* The folder the note is in, after its name. */
+.upkeep-folder {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-size: 0.92em;
+  font-weight: 400;
+}
+
+.upkeep-row {
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+
+.upkeep-row:hover {
+  color: var(--text);
+}
+
+/* Under a stale note: its day and the newest commit since, which gets a line of its own. */
+.upkeep-detail {
+  margin: 0 0 6px;
+  padding: 0 8px 0 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.upkeep-commit {
+  display: block;
+  color: var(--text);
+}
+
+.upkeep-empty {
+  margin: 0;
+  padding: 4px 8px;
+  color: var(--text-muted);
+}
+
+/* A task: its checkbox (drawn as in a note, `md-task-checkbox`), then its text, which is a button. */
+.task {
+  display: flex;
+  align-items: baseline;
+  padding-left: 12px;
+}
+
+.task .md-task-checkbox {
+  flex: none;
+}
+
+.task .upkeep-row {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  padding-left: 4px;
+}
+
+/*
+ * The claims module. In a note, `claim-mark` stands in place of a claim's `<!-- check: … -->` marker and
+ * `claim-dim` is the text of a claim that is stale or was never checked. Each status has a shape of its own
+ * (modules/claims/marks.ts); the colour is a second sign.
+ */
+.claim-mark,
+.claim-status {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--claim-unchecked);
+}
+
+.claim-mark.is-passing,
+.claim-status.is-passing {
+  color: var(--claim-passing);
+}
+
+.claim-mark.is-failing,
+.claim-status.is-failing {
+  color: var(--claim-failing);
+}
+
+.claim-mark.is-stale,
+.claim-status.is-stale {
+  color: var(--claim-stale);
+}
+
+.claim-mark {
+  padding: 2px;
+  border-radius: var(--radius-s);
+  font-size: 0.95em;
+  vertical-align: -0.2em;
+  cursor: pointer;
+}
+
+.claim-mark:hover {
+  background: var(--bg-hover);
+}
+
+/* While its check runs. */
+.claim-mark.is-checking {
+  animation: claim-checking 1.2s ease-in-out infinite;
+}
+
+@keyframes claim-checking {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.claim-dim {
+  opacity: var(--claim-dim);
+}
+
+/* The popover of a claim, under its mark. */
+.claim-popover {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  font: var(--font-size-ui) / 1.4 var(--font-ui);
+  color: var(--text);
+  animation: pop-in 80ms ease-out;
+}
+
+.claim-popover-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.claim-popover-head .claim-status {
+  font-size: 16px;
+}
+
+.claim-popover-status {
+  font-weight: 600;
+}
+
+.claim-popover-head .claim-meta {
+  margin-left: auto;
+}
+
+/* A claim's kind and the day of its last check, and in the panel its note. */
+.claim-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.claim-evidence {
+  display: block;
+  max-width: 100%;
+  color: var(--text-muted);
+  font: 11px / 1.45 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.claim-popover .claim-evidence {
+  color: var(--text);
+  font-size: 12px;
+}
+
+/* The end of what the last check printed. */
+.claim-output {
+  width: 100%;
+  max-height: 180px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border-radius: var(--radius);
+  background: var(--code-bg);
+  font: 11px / 1.45 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* Why a check did not run, e.g. that commands are off for the vault. */
+.claim-notice {
+  margin: 0;
+  color: var(--claim-failing);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.claim-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.claim-check:disabled,
+.claims-bar .button:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.claim-check:disabled:hover,
+.claims-bar .button:disabled:hover {
+  background: var(--bg);
+  filter: none;
+}
+
+/* The claims panel: "Check all" on top, then a claim per row: its mark, its text with note and evidence under it, its Check button. */
+.claims-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 6px;
+}
+
+.claim {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 2px 8px 6px;
+}
+
+.claim > .claim-status {
+  margin-top: 5px;
+  font-size: 14px;
+}
+
+.claim-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.claim .upkeep-row {
+  padding: 3px 4px;
+  color: var(--text);
+}
+
+.claim-body > .claim-meta,
+.claim-body > .claim-evidence,
+.claim-body > .claim-notice {
+  padding: 0 4px;
+}
+
+.claim .claim-check {
+  flex: none;
+  height: 24px;
+  margin-top: 2px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+/* The heading of the passing claims, which opens and closes their list. */
+.claims-fold {
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.claims-fold:hover {
+  color: var(--text);
+}
+
+/* The popover's Check is the main button: while a check runs it keeps its colours, paler. */
+.claim-popover .claim-check:disabled,
+.claim-popover .claim-check:disabled:hover {
+  background: var(--accent);
+  color: var(--accent-text);
+  opacity: 0.55;
+}
+
+/* Find and replace in a note (CodeMirror's search panel, opened by `note.find`), in the app's look. */
+.cm-editor .cm-panels {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  color: var(--text);
+  font: inherit;
+}
+
+.cm-editor .cm-panel.cm-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 36px 8px 12px;
+  font-size: 13px;
+}
+
+.cm-editor .cm-search br {
+  flex-basis: 100%;
+  height: 0;
+  content: "";
+}
+
+.cm-editor .cm-search .cm-textfield {
+  height: 26px;
+  margin: 0;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.cm-editor .cm-search .cm-textfield:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 0;
+}
+
+.cm-editor .cm-search .cm-button {
+  height: 26px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg);
+  background-image: none;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.cm-editor .cm-search .cm-button:hover {
+  background: var(--bg-hover);
+}
+
+.cm-editor .cm-search label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cm-editor .cm-search button[name="close"] {
+  top: 8px;
+  right: 10px;
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+.cm-editor .cm-searchMatch {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.cm-editor .cm-searchMatch-selected {
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}

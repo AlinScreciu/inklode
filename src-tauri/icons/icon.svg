@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+<clipPath id="sq"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+<linearGradient id="ember" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f09a5c"/><stop offset="1" stop-color="#b84a14"/></linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7d06a"/><stop offset="1" stop-color="#c8862a"/></linearGradient>
+<linearGradient id="dark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2d33"/><stop offset="1" stop-color="#17181b"/></linearGradient>
+<linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#efece6"/></linearGradient>
+<linearGradient id="ink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c3566"/><stop offset="1" stop-color="#0f1226"/></linearGradient>
+<linearGradient id="inktile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#232a52"/><stop offset="1" stop-color="#0c0f20"/></linearGradient>
+<linearGradient id="stone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#565a65"/><stop offset="1" stop-color="#33353c"/></linearGradient>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="186" fill="url(#dark)"/>
+<polygon points="512,170 330,470 512,600" fill="#f3a56b" stroke="#f3a56b" stroke-width="2"/><polygon points="330,470 262,628 512,600" fill="#e8824a" stroke="#e8824a" stroke-width="2"/><polygon points="262,628 340,812 512,600" fill="#d2662a" stroke="#d2662a" stroke-width="2"/><polygon points="340,812 512,878 512,600" fill="#b84a14" stroke="#b84a14" stroke-width="2"/><polygon points="512,878 684,812 512,600" fill="#9a3c10" stroke="#9a3c10" stroke-width="2"/><polygon points="684,812 762,628 512,600" fill="#b84a14" stroke="#b84a14" stroke-width="2"/><polygon points="762,628 694,470 512,600" fill="#d2662a" stroke="#d2662a" stroke-width="2"/><polygon points="694,470 512,170 512,600" fill="#e8824a" stroke="#e8824a" stroke-width="2"/>
+</svg>

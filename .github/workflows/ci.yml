@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # macOS is the only platform the app is tested on.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rustup is on the runner image; the crates need edition 2024 (Rust 1.85 or newer).
+      - name: Install the Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # Node 24 strips types on import, which the test:* scripts rely on.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: cargo test --workspace
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - name: Run every test:* script
+        run: |
+          for script in $(node -e 'console.log(Object.keys(require("./package.json").scripts).filter(s => s.startsWith("test:")).join(" "))'); do
+            echo "== $script"
+            pnpm run "$script"
+          done

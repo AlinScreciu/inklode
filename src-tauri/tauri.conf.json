@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Inklode",
+  "version": "0.1.0",
+  "identifier": "app.inklode.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Inklode",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 600,
+        "minHeight": 400,
+        "zoomHotkeysEnabled": true
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' asset: http://asset.localhost data: blob: https:",
+        "font-src": "'self' data:",
+        "connect-src": "'self' ipc: http://ipc.localhost",
+        "frame-src": "'none'",
+        "object-src": "'none'",
+        "base-uri": "'self'",
+        "form-action": "'none'"
+      },
+      "dangerousDisableAssetCspModification": ["style-src"],
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlFM0Q4RTY1M0VDMTdCOTEKUldTUmU4RStaWTQ5bm5TMnBXS2V3ZXZnZkY1anpuQTJNYlNFQVAwelpIMEpqemNUeERGNnJLRngK",
+      "endpoints": ["https://github.com/AlinScreciu/inklode/releases/latest/download/latest.json"],
+      "requireSignedVersion": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "hardenedRuntime": true
+    },
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

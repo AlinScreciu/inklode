@@ -1,0 +1,51 @@
+[package]
+name = "inklode"
+version = "0.1.0"
+license = "MIT"
+description = "Inklode desktop shell: the window and the bridge from the UI to inklode-core."
+authors = ["Alin Screciu"]
+repository = "https://github.com/AlinScreciu/inklode"
+homepage = "https://github.com/AlinScreciu/inklode"
+keywords = ["markdown", "notes", "tauri", "local-first", "obsidian"]
+edition = "2024"
+
+[lib]
+# The `_lib` suffix keeps the lib name different from the bin name, which Windows needs.
+name = "inklode_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+inklode-core = { path = "../crates/core" }
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+serde_json = "1"
+inklode-mcp = { version = "0.1.0", path = "../crates/mcp" }
+rmcp = { version = "3.10", default-features = false, features = ["server", "transport-streamable-http-server"] }
+tokio = { version = "1", features = ["sync", "time", "net", "rt", "macros"] }
+hyper = { version = "1", features = ["server", "http1"] }
+base64 = "0.23"
+hyper-util = { version = "0.1", features = ["tokio"] }
+tauri-plugin-opener = "2"
+tauri-plugin-global-shortcut = "2"
+# The Copy buttons of the MCP settings write the token to the clipboard from Rust, so it never enters the window.
+tauri-plugin-clipboard-manager = "2"
+# The MCP token.
+getrandom = "0.3"
+# The body of the 401 answer of the MCP server.
+http-body-util = "0.1"
+bytes = "1"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSImage", "NSImageRep", "NSBitmapImageRep", "NSPanel", "NSResponder", "NSWindow"] }
+objc2-foundation = { version = "0.3", features = ["NSData", "NSDictionary", "NSError", "NSString"] }
+objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKSnapshotConfiguration", "block2", "objc2-app-kit"] }

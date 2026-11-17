@@ -1,0 +1,23 @@
+[package]
+name = "inklode-core"
+version = "0.1.0"
+license = "MIT"
+edition = "2024"
+description = "Inklode's vault logic. No UI and no Tauri dependency, so the MCP server and tests can use it headless."
+authors = ["Alin Screciu"]
+repository = "https://github.com/AlinScreciu/inklode"
+homepage = "https://github.com/AlinScreciu/inklode"
+keywords = ["markdown", "notes", "vault", "local-first", "obsidian"]
+
+[dependencies]
+notify-debouncer-mini = "0.7.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+# `kill` for the process group of a claim's command that ran out of time (claims.rs).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"

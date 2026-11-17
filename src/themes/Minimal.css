@@ -1,0 +1,120 @@
+/*
+ * Minimal for Inklode: the default colour scheme of Minimal, light and dark, with its type sizes.
+ *
+ * A port to Inklode's variables of Minimal Theme for Obsidian, https://github.com/kepano/obsidian-minimal.
+ * No rule of the original stylesheet is copied.
+ *
+ * MIT License. Copyright (c) 2020-2024 Steph Ango (@kepano).
+ * The full licence text is in THIRD-PARTY-NOTICES.md at the root of the Inklode repository.
+ */
+
+/*
+ * Minimal derives its greys from one base lightness (96% light, 15% dark) and its accent from
+ * hsl(201, 17%, 50%), 60% in dark. The values below are those formulas worked out, named as in Minimal:
+ * bg1-3 backgrounds, ui1-2 borders, tx1-4 text, ax1 and ax3 accents, hl1-2 highlights.
+ */
+:root {
+  --min-bg1: #ffffff;
+  --min-bg2: #f5f5f5;
+  --min-bg3: rgb(117 117 117 / 0.12);
+  --min-ui1: #e6e6e6;
+  --min-ui2: #d6d6d6;
+  --min-tx1: #0f0f0f;
+  --min-tx2: #757575;
+  --min-tx3: #b5b5b5;
+  --min-tx4: #5c5c5c;
+  --min-ax1: #6a8695;
+  --min-ax3: #7c95a2;
+  --min-hl1: hsl(201 50% 76% / 0.3);
+  --min-hl2: rgb(255 225 0 / 0.5);
+}
+
+:root[data-appearance="dark"] {
+  --min-bg1: #262626;
+  --min-bg2: #212121;
+  --min-bg3: rgb(140 140 140 / 0.12);
+  --min-ui1: #363636;
+  --min-ui2: #454545;
+  --min-tx1: #d1d1d1;
+  --min-tx2: #999999;
+  --min-tx3: #595959;
+  --min-tx4: #a6a6a6;
+  --min-ax1: #889eaa;
+  --min-ax3: #7992a0;
+  --min-hl1: hsl(201 50% 40% / 0.3);
+  --min-hl2: rgb(255 177 80 / 0.3);
+}
+
+/* `:root[data-appearance]`, because plain `:root` loses to the app's own dark values. */
+:root[data-appearance] {
+  --line-height-text: 1.5;
+  --line-width: 40rem;
+
+  --bg: var(--min-bg1);
+  --bg-sidebar: var(--min-bg2);
+  --bg-ribbon: var(--min-bg2);
+  --bg-elevated: var(--min-bg1);
+  --bg-hover: var(--min-bg3);
+  /* Minimal uses bg3 for both; here the selected row gets the veil twice, so it differs from a hovered one. */
+  --bg-active: color-mix(in srgb, var(--min-tx2) 22%, transparent);
+  --border: var(--min-ui1);
+  --text: var(--min-tx1);
+  --text-muted: var(--min-tx2);
+  --accent: var(--min-ax1);
+  --accent-text: #ffffff;
+  --error: #d04255;
+  --tooltip-bg: var(--min-ui2);
+  --tooltip-text: var(--min-tx1);
+
+  --syntax-heading: var(--min-tx1);
+  --syntax-link: var(--min-ax1);
+  --syntax-code: var(--min-tx4);
+  --syntax-quote: var(--min-tx2);
+  /* Minimal uses tx3 for Markdown marks, which is too faint to read in source mode. */
+  --syntax-meta: var(--text-faint);
+  /* Minimal's code hues, mixed with the text colour as the app does: as they are, yellow cannot be read on white. */
+  --syntax-keyword: color-mix(in oklab, #b05279 62%, var(--text));
+  --syntax-string: color-mix(in oklab, #a8c373 62%, var(--text));
+  --syntax-number: color-mix(in oklab, #9e86c8 62%, var(--text));
+  --syntax-type: color-mix(in oklab, #e5b567 62%, var(--text));
+  --syntax-function: color-mix(in oklab, #e5b567 62%, var(--text));
+  --syntax-property: color-mix(in oklab, #73bbb2 62%, var(--text));
+
+  --selection-bg: var(--min-hl1);
+  --heading-1-size: 1.125em;
+  --heading-2-size: 1.05em;
+  --heading-3-size: 1em;
+  --heading-4-size: 0.9em;
+  --heading-5-size: 0.85em;
+  --heading-6-size: 0.85em;
+  --heading-weight: 600;
+  --heading-1-weight: 600;
+  --heading-6-text: var(--min-tx1);
+  --blockquote-bar: var(--min-ui2);
+  --blockquote-bar-width: 1px;
+  --bullet-color: var(--min-tx3);
+  --checkbox-color: var(--min-ax3);
+  --table-header-bg: var(--min-bg1);
+  --graph-edge: var(--min-ui2);
+  --hit-mark-bg: var(--min-hl2);
+}
+
+/* Minimal's lighter weights for the lower headings, and its small caps. Inklode has one weight variable for levels 2 to 6. */
+.editor .md-heading-3,
+.editor .md-heading-4,
+.editor .md-heading-5,
+.md-heading-3 .tok-heading,
+.md-heading-4 .tok-heading,
+.md-heading-5 .tok-heading {
+  font-weight: 500;
+}
+
+.editor .md-heading-6,
+.md-heading-6 .tok-heading {
+  font-weight: 400;
+}
+
+.editor .md-heading-5,
+.editor .md-heading-6 {
+  font-variant: small-caps;
+}

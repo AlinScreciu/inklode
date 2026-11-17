@@ -1,0 +1,72 @@
+{
+  "name": "inklode",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local-first desktop Markdown notes app for a plain folder of notes, built for working with AI agents: MCP server, git history, review inbox and claims with evidence.",
+  "license": "MIT",
+  "author": "Alin Screciu",
+  "homepage": "https://github.com/AlinScreciu/inklode",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlinScreciu/inklode.git"
+  },
+  "bugs": "https://github.com/AlinScreciu/inklode/issues",
+  "keywords": [
+    "markdown",
+    "notes",
+    "tauri",
+    "mcp",
+    "local-first",
+    "obsidian",
+    "codemirror"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test:capture": "node src/modules/capture/append.test.mjs",
+    "test:claims": "node src/modules/claims/claims.test.mjs",
+    "test:editor": "node src/components/lineEndings.test.mjs",
+    "test:excalidraw": "node src/modules/excalidraw/format.test.mjs",
+    "test:frontmatter": "node src/components/frontmatter.test.mjs",
+    "test:history": "node src/modules/history/blame.test.mjs",
+    "test:merge": "node src/modules/merge/merge3.test.mjs",
+    "test:review": "node src/modules/review/inbox.test.mjs",
+    "test:shell": "node src/commands.test.mjs && node src/appearance.test.mjs && node src/history.test.mjs && node src/workspace.test.mjs && node src/textDiff.test.mjs && node src/saves.test.mjs && node src/fileNames.test.mjs",
+    "test:tables": "node src/modules/tables/table.test.mjs",
+    "test:tasks": "node src/modules/tasks/tasks.test.mjs",
+    "test:themes": "node src/themes/themes.test.mjs",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/language-data": "6.5.2",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
+    "@excalidraw/excalidraw": "0.18.1",
+    "@lezer/highlight": "^1.2.5",
+    "@lezer/markdown": "^1.8.1",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
+    "@tauri-apps/plugin-opener": "^2.7.3",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
+    "d3-force": "3.0.0",
+    "lucide-react": "1.73.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/d3-force": "^3.0.10",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16"
+  }
+}

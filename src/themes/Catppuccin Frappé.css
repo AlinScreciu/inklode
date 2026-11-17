@@ -1,0 +1,97 @@
+/*
+ * Catppuccin Frappé for Inklode: a dark theme, the same in both appearances.
+ *
+ * A port to Inklode's variables of Catppuccin for Obsidian, https://github.com/catppuccin/obsidian,
+ * with the palette from https://github.com/catppuccin/palette. No rule of the original stylesheet is copied.
+ *
+ * MIT License. Copyright (c) 2021 Catppuccin.
+ * The full licence text is in THIRD-PARTY-NOTICES.md at the root of the Inklode repository.
+ */
+
+/*
+ * Frappé. `color-scheme` makes scrollbars and form controls dark in light appearance too.
+ * shortcut: in light appearance the shadows and the backdrop stay the app's light ones, which are
+ * weaker than a dark theme wants; set --shadow-popover, --shadow-dialog and --backdrop here if it shows.
+ */
+:root[data-appearance] {
+  color-scheme: dark;
+  --ctp-rosewater: #f2d5cf;
+  --ctp-pink: #f4b8e4;
+  --ctp-maroon: #ea999c;
+  --ctp-red: #e78284;
+  --ctp-yellow: #e5c890;
+  --ctp-green: #a6d189;
+  --ctp-sky: #99d1db;
+  --ctp-sapphire: #85c1dc;
+  --ctp-blue: #8caaee;
+  --ctp-lavender: #babbf1;
+  --ctp-text: #c6d0f5;
+  --ctp-subtext0: #a5adce;
+  --ctp-overlay2: #949cbb;
+  --ctp-surface2: #626880;
+  --ctp-surface1: #51576d;
+  --ctp-surface0: #414559;
+  --ctp-base: #303446;
+  --ctp-mantle: #292c3c;
+  --ctp-crust: #232634;
+}
+
+/*
+ * Mapping. The same text in every Catppuccin*.css, which `pnpm test:themes` checks.
+ * `:root[data-appearance]`, because plain `:root` loses to the app's own dark values.
+ */
+:root[data-appearance] {
+  --bg: var(--ctp-base);
+  --bg-sidebar: var(--ctp-mantle);
+  --bg-ribbon: var(--ctp-crust);
+  --bg-elevated: var(--ctp-base);
+  --bg-hover: color-mix(in srgb, var(--ctp-text) 8%, transparent);
+  --bg-active: color-mix(in srgb, var(--ctp-lavender) 16%, transparent);
+  --border: var(--ctp-surface0);
+  --text: var(--ctp-text);
+  --text-muted: var(--ctp-subtext0);
+  /* Lavender is the accent of the Obsidian port when its Style Settings are untouched. */
+  --accent: var(--ctp-lavender);
+  --accent-text: var(--ctp-mantle);
+  --error: var(--ctp-red);
+  --tooltip-bg: var(--ctp-surface1);
+  --tooltip-text: var(--ctp-text);
+
+  --syntax-heading: var(--ctp-lavender);
+  --syntax-link: var(--ctp-blue);
+  --syntax-code: var(--ctp-subtext0);
+  --syntax-quote: var(--ctp-rosewater);
+  /* The port uses surface1 for Markdown marks and code comments, which is close to invisible. */
+  --syntax-meta: var(--text-faint);
+  --syntax-keyword: var(--ctp-pink);
+  --syntax-string: var(--ctp-green);
+  --syntax-number: var(--ctp-lavender);
+  --syntax-type: var(--ctp-yellow);
+  --syntax-function: var(--ctp-yellow);
+  --syntax-property: var(--ctp-sky);
+
+  --selection-bg: color-mix(in srgb, var(--ctp-overlay2) 30%, transparent);
+  --heading-6-text: var(--ctp-lavender);
+  --inline-title-text: var(--ctp-text);
+  --blockquote-bar: var(--ctp-lavender);
+  --rule-color: var(--ctp-blue);
+  --bullet-color: var(--ctp-sapphire);
+  --list-number-text: var(--ctp-sapphire);
+  --task-done-text: var(--ctp-green);
+  --table-header-bg: var(--ctp-base);
+  --graph-edge: var(--ctp-surface2);
+  --hit-mark-bg: color-mix(in srgb, var(--ctp-rosewater) 35%, transparent);
+}
+
+/* Coloured emphasis is a mark of the Catppuccin port, and Inklode has no variables for it. */
+.tok-strong {
+  color: var(--ctp-sapphire);
+}
+
+.tok-emphasis {
+  color: var(--ctp-green);
+}
+
+.tok-strikethrough {
+  color: var(--ctp-maroon);
+}
