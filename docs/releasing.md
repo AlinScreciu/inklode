@@ -1,6 +1,6 @@
 # Releasing
 
-A release is a GitHub release of `AlinScreciu/inklode` with four files, made on the maintainer's Mac by `scripts/release.sh`. macOS on Apple Silicon is the only platform.
+A release is a GitHub release of `AlinScreciu/inklode` with four files, made by `scripts/release.sh`, on the maintainer's Mac or in CI from a pushed tag ("From CI" below). macOS on Apple Silicon is the only platform.
 
 | File | For |
 |---|---|
@@ -54,6 +54,28 @@ A release is a GitHub release of `AlinScreciu/inklode` with four files, made on 
 6. **Check.** Open the disk image, drag the app to Applications, start it. `spctl -a -vv /Applications/Inklode.app` says `accepted` and `source=Notarized Developer ID`. Look at `release/<version>/latest.json`: the version and the URL are the ones of this release.
 7. **Publish**, with the two commands the script prints: `gh release create v<version> ... --draft` with the four files, then `gh release edit v<version> --draft=false --latest`. From the second command on, installed apps offer the update. The file names must stay as they are: `latest.json` points at `releases/download/v<version>/Inklode.app.tar.gz`, and the app looks for `latest.json` by that name.
 8. **Check the update** from the version before: start it, and it offers the new one.
+
+## From CI
+
+`.github/workflows/release.yml` does steps 5 and 7 on a GitHub runner. Do steps 1 to 4, then push the tag:
+
+```sh
+git tag v<version> && git push origin v<version>
+```
+
+The workflow refuses a tag that is not `v` plus the version in the manifests. It runs `scripts/release.sh` and attaches the four files to a **draft** release whose notes are the version's section of `CHANGELOG.md`. Nothing reaches installed apps until the draft is published: download the disk image from the draft, do step 6, then `gh release edit v<version> --draft=false --latest` (or "Publish release" on the page), then step 8.
+
+The job runs in the environment `release`, which holds its secrets, so no other workflow can read them:
+
+| Secret | What |
+|---|---|
+| `APPLE_CERTIFICATE_P12` | The Developer ID Application certificate with its private key, exported from Keychain Access as a `.p12`, base64-encoded (`base64 -i file.p12`). |
+| `APPLE_CERTIFICATE_PASSWORD` | The password given at that export. |
+| `APPLE_ID`, `APPLE_TEAM_ID` | The Apple account and the team the certificate belongs to. |
+| `APPLE_APP_PASSWORD` | An app-specific password for that account (account.apple.com), made for CI alone so it can be revoked alone. |
+| `TAURI_SIGNING_PRIVATE_KEY` | The content of the updater's private key. |
+
+Set each from a file or a prompt, so the value is in no shell history: `gh secret set NAME --env release < file`, or `gh secret set NAME --env release` and paste.
 
 ## Building without the keys
 

@@ -10,6 +10,8 @@
 #   - the notarytool keychain profile "inklode-notary" (xcrun notarytool store-credentials inklode-notary);
 #   - the updater's private key at ~/.tauri/inklode-updater.key, or TAURI_SIGNING_PRIVATE_KEY set to another
 #     path or to the key's content. The key is read by the Tauri CLI; this script never prints it.
+# NOTARY_KEYCHAIN, if set, is the keychain file that holds the notarytool profile (.github/workflows/release.yml
+# sets it); without it notarytool looks in the login keychain.
 #
 # Writes to release/<version>/ (git-ignored):
 #   Inklode.app.tar.gz        what the updater downloads
@@ -27,6 +29,9 @@ REPO="AlinScreciu/inklode"
 PRODUCT="Inklode"
 NOTARY_PROFILE="inklode-notary"
 SKIP_APPLE="${SKIP_APPLE:-0}"
+# How notarytool finds its credentials. CI keeps the profile in a keychain of its own and names it here.
+NOTARY=(--keychain-profile "$NOTARY_PROFILE")
+[ -z "${NOTARY_KEYCHAIN:-}" ] || NOTARY+=(--keychain "$NOTARY_KEYCHAIN")
 
 die() {
   echo "release: $*" >&2
@@ -67,7 +72,7 @@ else
   grep -F -q "\"$APPLE_SIGNING_IDENTITY\"" <<<"$(security find-identity -v -p codesigning)" \
     || die "no valid identity \"$APPLE_SIGNING_IDENTITY\" in the keychain (security find-identity -v -p codesigning)"
   # Asked before the build, so a missing or expired profile does not show up only after it.
-  xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null \
+  xcrun notarytool history "${NOTARY[@]}" >/dev/null \
     || die "the notarytool profile \"$NOTARY_PROFILE\" does not work (xcrun notarytool store-credentials $NOTARY_PROFILE)"
 fi
 
@@ -89,7 +94,7 @@ mkdir -p "$OUT"
 # status is read from its answer.
 notarize() {
   local file="$1" answer id status
-  answer="$(xcrun notarytool submit "$file" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json)"
+  answer="$(xcrun notarytool submit "$file" "${NOTARY[@]}" --wait --output-format json)"
   echo "$answer"
   id="$(node -p 'JSON.parse(process.argv[1]).id' "$answer")"
   status="$(node -p 'JSON.parse(process.argv[1]).status' "$answer")"
