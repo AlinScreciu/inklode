@@ -18,8 +18,6 @@ jobs:
     timeout-minutes: 60
     # The secrets belong to this environment, so no other workflow can read them.
     environment: release
-    env:
-      KEYCHAIN: ${{ runner.temp }}/release.keychain-db
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +26,8 @@ jobs:
           version="$(node -p 'require("./src-tauri/tauri.conf.json").version')"
           [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "the tag is $GITHUB_REF_NAME, tauri.conf.json has $version" >&2; exit 1; }
           echo "VERSION=$version" >> "$GITHUB_ENV"
+          # The keychain made below, for this run only.
+          echo "KEYCHAIN=$RUNNER_TEMP/release.keychain-db" >> "$GITHUB_ENV"
 
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
