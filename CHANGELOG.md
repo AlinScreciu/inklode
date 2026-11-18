@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3
+
+No new features. Updated dependencies:
+
+- Tauri 2.12.6 and the other Rust crates at their latest compatible versions; `getrandom` 0.4.
+- Fixed versions of `nanoid` and `lodash-es` inside Excalidraw, which had security advisories.
+- Built with Rust 1.100, TypeScript 7 and pnpm 12.
+
 ## 0.1.2
 
 No change to the app. The first version built, signed and notarized by CI from a pushed tag.
