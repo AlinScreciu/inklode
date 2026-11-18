@@ -9,6 +9,14 @@ Fixes, found on a vault of 360 notes:
 - The stale check of vault health is stricter about what it counts: a `repos:` name must be a repository's root folder, not a folder inside another repository; only commits on the default branch count; `repo:dir` and `repo:!dir` limit the check to a folder or to everything outside it; commits that only touch `.gitignore`, `.gitattributes`, `.editorconfig`, `.github/CODEOWNERS` or `.pre-commit-config.yaml` do not count.
 - In the graph, labels no longer cover each other.
 
+Faster, measured on vaults of 400 and 3000 notes:
+
+- The review inbox and a note's git history no longer keep notes from opening and saving while they are worked out.
+- A rename that rewrites the links of many notes is about eight times faster (209 notes: 1.05 s to 0.13 s). Every note is still flushed to disk before it replaces the old one. A note that another program changed during the rename keeps its old links, and the rename says so.
+- A new note and a deleted note are looked up in the review inbox alone, not with the whole vault (0.1 s to 0.03 s at 400 notes).
+- Vault health remembers a repository's commits until its default branch moves, refreshes three seconds after the last change instead of at every save, and on window focus only while its panel is open.
+- A note's backlinks are asked for once, not twice, and the list is built only while it is unfolded.
+
 Releases: the signature the updater checks is now made on the maintainer's Mac and no longer in CI, so GitHub alone cannot ship an update.
 
 ## 0.1.3
