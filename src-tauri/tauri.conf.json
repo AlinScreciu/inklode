@@ -49,7 +49,6 @@
   },
   "bundle": {
     "active": true,
-    "createUpdaterArtifacts": true,
     "macOS": {
       "hardenedRuntime": true
     },

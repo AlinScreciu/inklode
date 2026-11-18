@@ -1,22 +1,19 @@
 #!/usr/bin/env bash
-# Builds everything a GitHub release of Inklode needs, on this Mac, and stops before publishing.
-# docs/releasing.md has the steps around it.
+# Builds the app for a GitHub release of Inklode: signed, notarized and stapled, as the updater's archive and
+# as a disk image. It does not sign the archive for the updater and does not publish: scripts/sign-update.sh
+# signs, on the maintainer's Mac, where the updater's private key is. docs/releasing.md has the steps.
 #
 #   APPLE_SIGNING_IDENTITY="Developer ID Application: Name (TEAMID)" scripts/release.sh
 #
 # Needs:
 #   - a clean working tree, with the same version in src-tauri/tauri.conf.json, src-tauri/Cargo.toml and package.json;
 #   - APPLE_SIGNING_IDENTITY: a "Developer ID Application: ..." identity that is in the keychain;
-#   - the notarytool keychain profile "inklode-notary" (xcrun notarytool store-credentials inklode-notary);
-#   - the updater's private key at ~/.tauri/inklode-updater.key, or TAURI_SIGNING_PRIVATE_KEY set to another
-#     path or to the key's content. The key is read by the Tauri CLI; this script never prints it.
+#   - the notarytool keychain profile "inklode-notary" (xcrun notarytool store-credentials inklode-notary).
 # NOTARY_KEYCHAIN, if set, is the keychain file that holds the notarytool profile (.github/workflows/release.yml
 # sets it); without it notarytool looks in the login keychain.
 #
 # Writes to release/<version>/ (git-ignored):
-#   Inklode.app.tar.gz        what the updater downloads
-#   Inklode.app.tar.gz.sig    its signature (the same text is inside latest.json)
-#   latest.json               what the app's update check reads
+#   Inklode.app.tar.gz              what the updater downloads, not yet signed for it
 #   Inklode-<version>-aarch64.dmg   the download for people
 #
 # SKIP_APPLE=1 is for testing this script only. It skips the Developer ID signature, notarization, stapling and
@@ -76,14 +73,6 @@ else
     || die "the notarytool profile \"$NOTARY_PROFILE\" does not work (xcrun notarytool store-credentials $NOTARY_PROFILE)"
 fi
 
-# The updater's private key. `tauri build` wants it because `bundle.createUpdaterArtifacts` is on, and takes a
-# path or the key's content in TAURI_SIGNING_PRIVATE_KEY. The key has no password.
-export TAURI_SIGNING_PRIVATE_KEY="${TAURI_SIGNING_PRIVATE_KEY:-$HOME/.tauri/inklode-updater.key}"
-export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
-case "$TAURI_SIGNING_PRIVATE_KEY" in
-  /* | ./* | ~/*) [ -f "$TAURI_SIGNING_PRIVATE_KEY" ] || die "no updater key at $TAURI_SIGNING_PRIVATE_KEY (docs/releasing.md says where it lives)" ;;
-esac
-
 OUT="$ROOT/release/$VERSION"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/inklode-release.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
@@ -139,46 +128,16 @@ if [ "$SKIP_APPLE" != "1" ]; then
 fi
 
 step "Updater archive"
-# The archive is made only now, from the stapled app, and not taken from `tauri build` (which also makes a
-# target/release/bundle/macos/Inklode.app.tar.gz, before notarization):
+# The archive is made only now, from the stapled app:
 #   - The updater puts exactly these bytes in the place of the installed app. Stapling adds the notarization
 #     ticket to the bundle, so an archive made earlier would install an app without the ticket, and a Mac that
 #     is offline, or cannot reach Apple, could not confirm that the app is notarized.
-#   - The updater's signature is over the bytes of the archive. Anything that changes the app afterwards,
-#     stapling included, would need a new archive and a new signature, so it comes last.
+#   - The updater's signature is over the bytes of the archive. scripts/sign-update.sh signs exactly this
+#     file later, so nothing may change the app or the archive after this point.
 ARCHIVE="$OUT/$PRODUCT.app.tar.gz"
 # COPYFILE_DISABLE and --no-mac-metadata keep AppleDouble "._" files out, which would break the app's seal
 # once unpacked by the updater. The archive's one top-level entry is the .app folder, as the updater expects.
 COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs -czf "$ARCHIVE" -C "$WORK" "$PRODUCT.app"
-
-# `--app-version` puts the version into the signed part of the signature. The app has
-# `plugins.updater.requireSignedVersion` on and refuses an update whose signature names another version than
-# latest.json does, so a changed latest.json cannot pass an older release off as a new one.
-if [ -f "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-  # `signer sign` takes a key file with -f and reads TAURI_SIGNING_PRIVATE_KEY as the key's content.
-  env -u TAURI_SIGNING_PRIVATE_KEY pnpm tauri signer sign --app-version "$VERSION" -f "$TAURI_SIGNING_PRIVATE_KEY" "$ARCHIVE" >/dev/null
-else
-  pnpm tauri signer sign --app-version "$VERSION" "$ARCHIVE" >/dev/null
-fi
-[ -s "$ARCHIVE.sig" ] || die "signing made no $ARCHIVE.sig"
-grep -q "version:$VERSION\$" <<<"$(base64 -d <"$ARCHIVE.sig")" || die "the signature does not carry version $VERSION"
-
-step "latest.json"
-# The format of the updater's static JSON file: `signature` is the content of the .sig file, and the key under
-# `platforms` is <os>-<arch>.
-URL="https://github.com/$REPO/releases/download/$TAG/$PRODUCT.app.tar.gz"
-node -e '
-  const fs = require("fs");
-  const [out, version, url, sig, notes] = process.argv.slice(1);
-  const manifest = {
-    version,
-    notes,
-    pub_date: new Date().toISOString(),
-    platforms: { "darwin-aarch64": { signature: fs.readFileSync(sig, "utf8").trim(), url } },
-  };
-  fs.writeFileSync(out, JSON.stringify(manifest, null, 2) + "\n");
-' "$OUT/latest.json" "$VERSION" "$URL" "$ARCHIVE.sig" "https://github.com/$REPO/releases/tag/$TAG"
-cat "$OUT/latest.json"
 
 step "Disk image"
 DMG="$OUT/$PRODUCT-$VERSION-aarch64.dmg"
@@ -203,16 +162,14 @@ if [ "$SKIP_APPLE" = "1" ]; then
 fi
 cat <<EOF
 
-Nothing was published. Check the app from the disk image, then publish (HEAD must be pushed first).
-As a draft, which no installed app sees:
+Nothing was published, and the archive is not signed for the updater yet. Make the draft release, which no
+installed app sees (the tag $TAG must be pushed first):
 
-  gh release create $TAG --repo $REPO --draft --target $(git rev-parse HEAD) --title "$PRODUCT $VERSION" --notes-file <notes.md> \\
+  gh release create $TAG --repo $REPO --draft --verify-tag --title "$PRODUCT $VERSION" --notes-file <notes.md> \\
     "release/$VERSION/$PRODUCT-$VERSION-aarch64.dmg" \\
-    "release/$VERSION/$PRODUCT.app.tar.gz" \\
-    "release/$VERSION/$PRODUCT.app.tar.gz.sig" \\
-    "release/$VERSION/latest.json"
+    "release/$VERSION/$PRODUCT.app.tar.gz"
 
-Then for everyone: from this moment installed apps offer the update.
+Then sign the update, which also says how to publish:
 
-  gh release edit $TAG --repo $REPO --draft=false --latest
+  scripts/sign-update.sh
 EOF

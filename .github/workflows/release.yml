@@ -1,8 +1,9 @@
 name: Release
 
 # A pushed tag v<version> runs the tests (ci.yml), then builds, signs and notarizes that commit with
-# scripts/release.sh and attaches the files to a DRAFT release. Installed apps see nothing until the draft is published by hand.
-# docs/releasing.md, "From CI", lists the secrets.
+# scripts/release.sh and attaches the disk image and the updater's archive to a DRAFT release.
+# The maintainer then signs the archive for the updater with scripts/sign-update.sh and publishes the draft;
+# installed apps see nothing before that. docs/releasing.md has the steps and lists the secrets.
 on:
   push:
     tags:
@@ -94,10 +95,10 @@ jobs:
       - name: Build, sign, notarize
         env:
           NOTARY_KEYCHAIN: ${{ env.KEYCHAIN }}
-          # The key's content. The Tauri CLI reads it; nothing prints it.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: scripts/release.sh
 
+      # Without the updater's signature and latest.json: scripts/sign-update.sh adds them from the maintainer's
+      # Mac, because the updater's private key is deliberately not a secret here.
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -106,9 +107,7 @@ jobs:
           awk -v heading="## $VERSION" '$0 == heading { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Inklode $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
             "release/$VERSION/Inklode-$VERSION-aarch64.dmg" \
-            "release/$VERSION/Inklode.app.tar.gz" \
-            "release/$VERSION/Inklode.app.tar.gz.sig" \
-            "release/$VERSION/latest.json"
+            "release/$VERSION/Inklode.app.tar.gz"
 
       - name: Delete the keychain
         if: always()

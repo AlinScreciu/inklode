@@ -28,7 +28,7 @@ pnpm dev                     # UI only at http://localhost:1420, on the mock vau
 cargo test --workspace       # all Rust tests
 cargo test -p inklode-core   # core only
 pnpm build                   # tsc, then vite build
-pnpm tauri build --bundles app   # needs TAURI_SIGNING_PRIVATE_KEY (docs/releasing.md); without the key add --config '{"bundle":{"createUpdaterArtifacts":false}}'
+pnpm tauri build --bundles app   # a release build, without Apple's signature (docs/releasing.md)
 ```
 
 UI self-checks are plain Node scripts, one `test:*` script per area in `package.json` (`pnpm test:claims`, `pnpm test:shell`, ...). There is no single `pnpm test`; run the script for the area you touched, and all of them before you say the work is done:

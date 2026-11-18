@@ -82,11 +82,7 @@ pnpm tauri dev                  # the desktop app, with hot reload
 pnpm tauri build --bundles app  # a release build: target/release/bundle/macos/Inklode.app
 ```
 
-The release build also makes the archive the app's updater downloads and signs it, which needs the maintainer's private key (`TAURI_SIGNING_PRIVATE_KEY`, see [docs/releasing.md](docs/releasing.md)). Without that key, build the app alone:
-
-```sh
-pnpm tauri build --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'
-```
+Releases are signed and notarized by a workflow; [docs/releasing.md](docs/releasing.md) has the steps.
 
 An app built this way still looks for updates from this repository's releases. A build under `pnpm tauri dev` never checks by itself.
 
