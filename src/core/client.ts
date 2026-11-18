@@ -181,6 +181,17 @@ export async function revealInFileManager(path: string): Promise<void> {
   await revealItemInDir(path);
 }
 
+/**
+ * Sets the size everything in the window is drawn at: 1 is normal. Tauri's own zoom keys are off
+ * (`zoomHotkeysEnabled` in tauri.conf.json) because they also take every step of a touchpad pinch as
+ * a jump of 20%; the `view.zoom*` commands call this. In a plain browser nothing happens: the browser has its own zoom.
+ */
+export async function setZoom(level: number): Promise<void> {
+  if (!inTauri) return;
+  const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+  await getCurrentWebview().setZoom(level);
+}
+
 /** Whether the app's window fills the screen. In a plain browser: whether the page is in the browser's fullscreen. */
 export async function isFullscreen(): Promise<boolean> {
   if (!inTauri) return document.fullscreenElement !== null;

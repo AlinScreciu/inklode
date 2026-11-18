@@ -34,6 +34,7 @@ import {
   pickFolder,
   quitApp,
   revealInFileManager,
+  setZoom,
   updatesSet,
   type AppSettings,
 } from "./core/client";
@@ -77,6 +78,15 @@ const NO_OUTLINE: { headings: Heading[] | null; current: number } = { headings: 
 const COUNT_MS = 300;
 /** `ui_state` reports at most this many characters of the editor's text. */
 const UI_STATE_TEXT_MAX = 20_000;
+
+/** The size the window is drawn at, 1 being normal. */
+let zoom = 1;
+
+/** Zooms the window in or out by `step`, within 50% to 300%; a step of 0 goes back to normal. */
+function zoomBy(step: number) {
+  zoom = step === 0 ? 1 : Math.min(3, Math.max(0.5, Math.round((zoom + step) * 10) / 10));
+  void setZoom(zoom);
+}
 
 /** localStorage can be unavailable; remembering the last vault is a convenience, never required. */
 function remember(path: string | null) {
@@ -1146,6 +1156,10 @@ export default function App() {
       },
       { id: "palette.open", title: "Command palette", key: "Mod+P", run: () => setDialog({ kind: "commands" }) },
       { id: "sidebar.toggle", title: "Toggle sidebar", key: "Mod+\\", run: () => setSidebarOpen((open) => !open) },
+      // The whole window, in steps of 10% from 50% to 300%. Not kept when the app is closed.
+      { id: "view.zoomIn", title: "Zoom in", key: "Mod+=", run: () => zoomBy(0.1) },
+      { id: "view.zoomOut", title: "Zoom out", key: "Mod+-", run: () => zoomBy(-0.1) },
+      { id: "view.zoomReset", title: "Reset zoom", key: "Mod+0", run: () => zoomBy(0) },
       {
         id: "editor.toggleSource",
         title: "Toggle source mode",
@@ -1441,8 +1455,12 @@ export default function App() {
       // transitioning, build, presenter}`, `index` from 0.
       drawing: null,
       slideshow: null,
-      // From the graph view: `{nodes, edges, filter, hovered}`, the counts of what the filter leaves and the path under the pointer.
+      // From the graph view: `{nodes, edges, kinds, filter, hovered, zoom, labels, settled, options, optionsOpen}`
+      // (`uiState` in modules/graph/canvas.ts has every field).
       graph: null,
+      // From the graph module: the local graph in the right sidebar, `{open, path, depth, options, …}`
+      // (modules/graph/index.ts has every field). Null with the module off.
+      localGraph: null,
       ...views.current.get(tab.id)?.uiState(note !== null && dirty(note)),
       // From the tables module: `{row, column, rows, columns}`, the cell the editor's cursor is in (row 0 is the
       // header) and the table's size. Null outside a table.
