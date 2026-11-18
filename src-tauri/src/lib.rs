@@ -36,6 +36,12 @@ fn core_call(
         let trusted = settings::claims_trusted(&app, check.root());
         return check.run(params, trusted).map_err(|e| e.to_string());
     }
+    if name == "vault.health" {
+        // Let go of in the same way: the report runs git in every repository the notes name,
+        // which takes seconds, and opening or saving a note must not wait for it.
+        let check = state.lock().map_err(|e| e.to_string())?.health_check().map_err(|e| e.to_string())?;
+        return Ok(serde_json::json!(check.run()));
+    }
     let mut core = state.lock().map_err(|e| e.to_string())?;
     let result = core.call(&name, params).map_err(|e| e.to_string())?;
     // The window may load files (images in notes) from the open vault, and from nowhere else.

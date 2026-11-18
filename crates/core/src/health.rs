@@ -3,21 +3,34 @@
 //! they describe, by this rule:
 //!
 //! A note with `repos: [name, ...]` and `updated: YYYY-MM-DD` in its frontmatter is stale
-//! when any branch of one of those repositories has a commit dated after the `updated:`
-//! day. Commits made on the day itself do not count. A `repos:` entry is a path
-//! (`~/projects/foo`) or a folder name, and a folder name is looked up, up to three levels
-//! deep, under the folders in `$VAULT_REPO_ROOTS` (colon-separated; default
-//! `~/projects:~/work:~/misc`).
+//! when the default branch of one of those repositories has a commit dated after the
+//! `updated:` day. Commits made on the day itself do not count.
+//!
+//! - A `repos:` entry is a path (`~/projects/foo`) or a folder name, and a folder name is
+//!   looked up, up to three levels deep, under the folders in `$VAULT_REPO_ROOTS`
+//!   (colon-separated; default `~/projects:~/work:~/misc`). The folder must be the root of
+//!   a repository: a folder inside one is not taken for it.
+//! - The default branch is `origin/HEAD` as last fetched, and what is checked out in a
+//!   repository that has no `origin/HEAD`. Other branches do not count.
+//! - An entry can end in a scope: `name:dir` counts only the commits that change something
+//!   under `dir` (a path from the repository's root), `name:!dir` only those that change
+//!   something outside it.
+//! - A commit that changes nothing but the files in `HOUSEKEEPING` does not count.
 //!
 //! Git is only read (`rev-parse` and `log`), and nothing is fetched: a commit that was
 //! not fetched yet is not seen.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
 use crate::git::git;
 use crate::index::{Broken, Index};
+
+/// Files at a repository's root that say how the repository is kept, not what the code
+/// does: a commit that changes only these makes no note stale.
+const HOUSEKEEPING: &[&str] = &[".gitignore", ".gitattributes", ".editorconfig", ".github/CODEOWNERS", ".pre-commit-config.yaml"];
 
 /// The result of `vault.health`.
 #[derive(Debug, Serialize)]
@@ -36,18 +49,18 @@ pub struct Stale {
     pub path: String,
     /// The note's `updated:` day.
     pub updated: String,
-    /// The `repos:` entry as written, and the folder it was found at.
+    /// The `repos:` entry as written, with its scope, and the repository's folder.
     pub repo: String,
     pub dir: String,
-    /// How many commits are dated after `updated`, on all branches.
+    /// How many commits of the default branch that count are dated after `updated`.
     pub commits: usize,
     pub newest: Newest,
 }
 
 /// The newest of those commits.
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, Clone)]
 pub struct Newest {
-    /// The committer's day, `YYYY-MM-DD`.
+    /// The day it was committed, `YYYY-MM-DD` in local time.
     pub date: String,
     /// The short hash.
     pub rev: String,
@@ -68,44 +81,140 @@ pub fn roots() -> Vec<PathBuf> {
     roots.split(':').filter(|root| !root.is_empty()).map(expand).collect()
 }
 
-// shortcut: the stale check runs `git log` once per note and repository on every call,
-// and a folder name walks the roots each time; remember the answer per repository and
-// its refs if a vault with many `repos:` notes makes the panel slow.
-pub fn report(index: &Index, roots: &[PathBuf]) -> Health {
+/// What one `vault.health` needs of the index, taken out of it by [`check`], so that a host
+/// can run the git part without holding the core: it takes seconds in a vault whose notes
+/// name many repositories, and the window reads and saves notes meanwhile.
+pub struct HealthCheck {
+    broken: Vec<Broken>,
+    orphans: Vec<String>,
+    /// The notes with `repos:`, as `(path, repos, updated)`.
+    notes: Vec<(String, Vec<String>, Option<String>)>,
+    roots: Vec<PathBuf>,
+}
+
+/// The part of the report that comes from the index, and what the stale check will read.
+pub fn check(index: &Index, roots: Vec<PathBuf>) -> HealthCheck {
     let orphans = index.graph().nodes.into_iter().filter(|node| node.links == 0).map(|node| node.path).collect();
-    let (mut stale, mut unchecked) = (Vec::new(), Vec::new());
-    for (path, text) in index.texts() {
-        let (repos, updated) = meta(text);
-        if repos.is_empty() {
-            continue;
-        }
-        let Some(since) = updated.as_deref().and_then(day_after) else {
-            unchecked.push(Unchecked { path: path.to_string(), repo: None, reason: "no valid `updated:` date".to_string() });
-            continue;
-        };
-        for repo in repos {
-            let dir = find_repo(&repo, roots).filter(|dir| git(dir, &["rev-parse", "--git-dir"]).is_some());
-            let Some(dir) = dir else {
-                unchecked.push(Unchecked { path: path.to_string(), repo: Some(repo), reason: "not found or not a git repository".to_string() });
-                continue;
-            };
-            // Newest first. `%cs` is the committer's day, which is the date `--since` goes by.
-            let log = git(&dir, &["log", "--all", &format!("--since={since}T00:00:00"), "--format=%cs%x1f%h%x1f%s"]).unwrap_or_default();
-            let log = String::from_utf8_lossy(&log);
-            let mut fields = log.lines().next().unwrap_or_default().split('\x1f').map(str::to_string);
-            if let (Some(date), Some(rev), Some(subject)) = (fields.next(), fields.next(), fields.next()) {
-                stale.push(Stale {
-                    path: path.to_string(),
-                    updated: updated.clone().unwrap_or_default(),
-                    repo,
-                    dir: dir.to_string_lossy().into_owned(),
-                    commits: log.lines().count(),
-                    newest: Newest { date, rev, subject },
-                });
+    let notes = index.texts().map(|(path, text)| (path, meta(text))).filter(|(_, (repos, _))| !repos.is_empty());
+    let notes = notes.map(|(path, (repos, updated))| (path.to_string(), repos, updated)).collect();
+    HealthCheck { broken: index.broken(), orphans, notes, roots }
+}
+
+/// Which commits of a repository an entry counts.
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum Scope {
+    All,
+    /// Those that change something under this folder.
+    Only(String),
+    /// Those that change something outside this folder.
+    Except(String),
+}
+
+impl HealthCheck {
+    /// The report. Runs git in the repositories the notes name, and reads nothing of the vault.
+    // shortcut: every report asks git again, twice per repository (three times with scopes
+    // or without `origin/HEAD`); keep the commits between reports, by the commit the default
+    // branch is at, if the panel gets slow in a vault that names many repositories.
+    pub fn run(self) -> Health {
+        // Many notes name the same repository, so each one is found once and its commits are
+        // read once per scope, from the earliest day a note asks about.
+        let since = |updated: &Option<String>| updated.as_deref().and_then(day_after);
+        let mut earliest: HashMap<(&str, Scope), String> = HashMap::new();
+        for (_, entries, updated) in &self.notes {
+            let Some(since) = since(updated) else { continue };
+            for entry in entries {
+                let day = earliest.entry(scoped(entry)).or_insert_with(|| since.clone());
+                if since < *day {
+                    *day = since.clone();
+                }
             }
         }
+        // A vault whose notes name no repository walks no folder.
+        let folders = if earliest.is_empty() { Vec::new() } else { lookup_folders(&self.roots) };
+        let mut repos: HashMap<&str, Option<PathBuf>> = HashMap::new();
+        let mut logs: HashMap<(&str, Scope), Vec<Newest>> = HashMap::new();
+        let (mut stale, mut unchecked) = (Vec::new(), Vec::new());
+        for (path, entries, updated) in &self.notes {
+            let Some(since) = since(updated) else {
+                unchecked.push(Unchecked { path: path.clone(), repo: None, reason: "no valid `updated:` date".to_string() });
+                continue;
+            };
+            for entry in entries {
+                let (name, scope) = scoped(entry);
+                let Some(dir) = repos.entry(name).or_insert_with(|| repository(name, &folders)) else {
+                    unchecked.push(Unchecked { path: path.clone(), repo: Some(entry.clone()), reason: "not found or not a git repository".to_string() });
+                    continue;
+                };
+                let key = (name, scope);
+                let log = logs.entry(key.clone()).or_insert_with(|| commits(dir, &earliest[&key], &key.1));
+                // Days in the form `YYYY-MM-DD` are in order as text.
+                let mut newer = log.iter().filter(|commit| commit.date >= since);
+                if let Some(newest) = newer.next() {
+                    stale.push(Stale { path: path.clone(), updated: updated.clone().unwrap_or_default(), repo: entry.clone(), dir: dir.to_string_lossy().into_owned(), commits: 1 + newer.count(), newest: newest.clone() });
+                }
+            }
+        }
+        Health { broken: self.broken, orphans: self.orphans, stale, unchecked }
     }
-    Health { broken: index.broken(), orphans, stale, unchecked }
+}
+
+/// A `repos:` entry as the repository it names and its scope: `name`, `name:dir` or `name:!dir`.
+fn scoped(entry: &str) -> (&str, Scope) {
+    // What follows the colon of a Windows drive (`C:\code\app`) is the path, not a scope.
+    let Some((name, dir)) = entry.rsplit_once(':').filter(|(_, dir)| !dir.starts_with(['\\', '/'])) else {
+        return (entry, Scope::All);
+    };
+    let clean = |dir: &str| dir.trim().trim_end_matches('/').to_string();
+    let scope = match dir.trim().strip_prefix('!') {
+        Some(dir) if !clean(dir).is_empty() => Scope::Except(clean(dir)),
+        None if !clean(dir).is_empty() => Scope::Only(clean(dir)),
+        _ => Scope::All,
+    };
+    (name.trim(), scope)
+}
+
+/// The root of the repository that `name` leads to. `None` when there is no such folder,
+/// or it is not the root of a repository: a folder inside a repository (a chart in a
+/// repository of charts) has that repository's whole history, which says nothing about the
+/// code the note names.
+fn repository(name: &str, folders: &[PathBuf]) -> Option<PathBuf> {
+    let dir = find_repo(name, folders)?;
+    let top = git(&dir, &["rev-parse", "--show-toplevel"])?;
+    let top = PathBuf::from(String::from_utf8_lossy(&top).trim_end_matches(['\n', '\r']));
+    // Compared as the real folders: git prints its path with the links in it followed.
+    (std::fs::canonicalize(&dir).ok()? == std::fs::canonicalize(top).ok()?).then_some(dir)
+}
+
+/// The commits of the default branch that are dated from the day `since` on and count in
+/// `scope`, newest first. None in a repository without a commit.
+fn commits(dir: &Path, since: &str, scope: &Scope) -> Vec<Newest> {
+    // Paths are from the repository's root and taken letter by letter: a `*` in a scope is no pattern.
+    let only = |path: &str| format!(":(top,literal){path}");
+    let not = |path: &str| format!(":(top,exclude,literal){path}");
+    // Git lists a commit when it changes a path that is asked for and not excluded, so one
+    // that changes only housekeeping files is left out. A merge that changes nothing itself
+    // is left out too.
+    let mut paths: Vec<String> = HOUSEKEEPING.iter().map(|path| not(path)).collect();
+    match scope {
+        Scope::All => paths.push(":(top)".to_string()),
+        Scope::Only(dir) => paths.push(only(dir)),
+        Scope::Except(dir) => paths.extend([":(top)".to_string(), not(dir)]),
+    }
+    let since = format!("--since={since}T00:00:00");
+    // `origin/HEAD` is the remote's default branch as last fetched. A repository without it
+    // (never cloned, or the remote added by hand) is read from what is checked out.
+    let log = ["refs/remotes/origin/HEAD", "HEAD"].iter().find_map(|branch| {
+        // `%cd` with this date format is the commit's day in local time, as `--since` reads a day.
+        let mut args = vec!["log", branch, "--date=format-local:%Y-%m-%d", "--format=%cd%x1f%h%x1f%s", since.as_str(), "--"];
+        args.extend(paths.iter().map(String::as_str));
+        git(dir, &args)
+    });
+    let log = String::from_utf8_lossy(&log.unwrap_or_default()).into_owned();
+    let commit = |line: &str| {
+        let mut fields = line.split('\x1f').map(str::to_string);
+        Some(Newest { date: fields.next()?, rev: fields.next()?, subject: fields.next()? })
+    };
+    log.lines().filter_map(commit).collect()
 }
 
 /// `~` and `~/…` as the home folder.
@@ -116,30 +225,37 @@ pub(crate) fn expand(path: &str) -> PathBuf {
     }
 }
 
+/// The folders a folder name is looked up in, in the order of the lookup: each root, then
+/// what is in it, two levels down. Folders that start with a dot and `node_modules` are
+/// not looked into. Listed once per report, not once per `repos:` entry.
+fn lookup_folders(roots: &[PathBuf]) -> Vec<PathBuf> {
+    fn walk(dir: &Path, deeper: usize, folders: &mut Vec<PathBuf>) {
+        folders.push(dir.to_path_buf());
+        if deeper == 0 {
+            return;
+        }
+        let Ok(inside) = std::fs::read_dir(dir) else { return };
+        let mut inside: Vec<PathBuf> = inside.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+        inside.sort();
+        let skipped = |p: &PathBuf| p.file_name().and_then(|name| name.to_str()).is_none_or(|name| name.starts_with('.') || name == "node_modules");
+        inside.iter().filter(|p| !skipped(p)).for_each(|p| walk(p, deeper - 1, folders));
+    }
+    let mut folders = Vec::new();
+    roots.iter().for_each(|root| walk(root, 2, &mut folders));
+    folders
+}
+
 /// The folder a `repos:` entry names: the path itself, or the first folder of that name
-/// under `roots`, at most three levels down (`root/name`, `root/a/name`, `root/a/b/name`).
-/// Folders that start with a dot and `node_modules` are not looked into.
+/// in `folders` (`lookup_folders`), which is at most three levels under a root
+/// (`root/name`, `root/a/name`, `root/a/b/name`).
 // The script's own walk stops one level sooner than its description says (`root/a/name`);
 // this follows the description.
-fn find_repo(entry: &str, roots: &[PathBuf]) -> Option<PathBuf> {
+fn find_repo(entry: &str, folders: &[PathBuf]) -> Option<PathBuf> {
     let path = expand(entry);
     if path.is_absolute() {
         return path.is_dir().then_some(path);
     }
-    fn walk(dir: &Path, entry: &str, deeper: usize) -> Option<PathBuf> {
-        let found = dir.join(entry);
-        if found.is_dir() {
-            return Some(found);
-        }
-        if deeper == 0 {
-            return None;
-        }
-        let mut inside: Vec<PathBuf> = std::fs::read_dir(dir).ok()?.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
-        inside.sort();
-        let skipped = |p: &PathBuf| p.file_name().and_then(|name| name.to_str()).is_none_or(|name| name.starts_with('.') || name == "node_modules");
-        inside.iter().filter(|p| !skipped(p)).find_map(|p| walk(p, entry, deeper - 1))
-    }
-    roots.iter().find_map(|root| walk(root, entry, 2))
+    folders.iter().map(|folder| folder.join(entry)).find(|found| found.is_dir())
 }
 
 /// `repos` and `updated` of a note's frontmatter, read line by line, not as full YAML:
@@ -242,6 +358,9 @@ mod tests {
         assert_eq!(read("---\nrepos: [inklode, \"~/work/api\"]\nupdated: 2026-03-01\n---\ntext\n"), (vec!["inklode".to_string(), "~/work/api".to_string()], Some("2026-03-01".to_string())));
         assert_eq!(read("---\nupdated: '2026-03-01'  \nrepos:\n  - inklode # the app\n  - api\ntags: [x]\n---\n"), (vec!["inklode".to_string(), "api".to_string()], Some("2026-03-01".to_string())));
         assert_eq!(read("---\nrepos: inklode\n---\n"), (vec!["inklode".to_string()], None));
+        // A scope is part of the entry.
+        assert_eq!(read("---\nrepos: [charts:!docs]\n---\n").0, ["charts:!docs"]);
+        assert_eq!(read("---\nrepos:\n  - charts:api\n---\n").0, ["charts:api"]);
         // No frontmatter: not at the top, or never closed.
         assert_eq!(read("text\n---\nrepos: [a]\n---\n"), (vec![], None));
         assert_eq!(read("---\nrepos: [a]\nupdated: 2026-03-01\n"), (vec![], None));
@@ -254,8 +373,8 @@ mod tests {
         for path in ["one/top", "one/a/mid", "one/a/b/deep", "one/a/b/c/lost", "one/.hidden/dotted", "one/node_modules/pkg", "two/other"] {
             std::fs::create_dir_all(dir.path().join(path)).unwrap();
         }
-        let roots = [dir.path().join("missing"), dir.path().join("one"), dir.path().join("two")];
-        let found = |entry: &str| find_repo(entry, &roots).map(|p| p.strip_prefix(dir.path()).unwrap().to_string_lossy().into_owned());
+        let folders = lookup_folders(&[dir.path().join("missing"), dir.path().join("one"), dir.path().join("two")]);
+        let found = |entry: &str| find_repo(entry, &folders).map(|p| p.strip_prefix(dir.path()).unwrap().to_string_lossy().into_owned());
         assert_eq!(found("top").as_deref(), Some("one/top"));
         assert_eq!(found("mid").as_deref(), Some("one/a/mid"));
         assert_eq!(found("deep").as_deref(), Some("one/a/b/deep"));
@@ -265,7 +384,158 @@ mod tests {
         }
         // A path is taken as it is, and is not looked up.
         let absolute = dir.path().join("one/a/b/c/lost");
-        assert_eq!(find_repo(absolute.to_str().unwrap(), &roots), Some(absolute));
-        assert_eq!(find_repo(dir.path().join("nope").to_str().unwrap(), &roots), None);
+        assert_eq!(find_repo(absolute.to_str().unwrap(), &folders), Some(absolute));
+        assert_eq!(find_repo(dir.path().join("nope").to_str().unwrap(), &folders), None);
+    }
+
+    /// Plain git in `dir`, as the one who prepares a repository, with commits dated noon of `day`.
+    fn git_on(dir: &Path, day: &str, args: &[&str]) {
+        let config = ["-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main", "-c", "user.name=Ana", "-c", "user.email=ana@example.com"];
+        let date = format!("{day}T12:00:00");
+        let dates = [("GIT_AUTHOR_DATE", &date), ("GIT_COMMITTER_DATE", &date)];
+        let output = std::process::Command::new("git").current_dir(dir).args(config).args(args).env("GIT_CONFIG_GLOBAL", "/dev/null").env("GIT_CONFIG_NOSYSTEM", "1").envs(dates).output().unwrap();
+        assert!(output.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    /// A commit on `day` that writes `files`, with `subject`.
+    fn commit(dir: &Path, day: &str, files: &[&str], subject: &str) {
+        for file in files {
+            let path = dir.join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, format!("{subject} on {day}\n")).unwrap();
+        }
+        git_on(dir, day, &["add", "-A"]);
+        git_on(dir, day, &["commit", "-q", "-m", subject]);
+    }
+
+    /// A new repository at `dir` with a first commit on 2026-03-01.
+    fn repo(dir: &Path) {
+        std::fs::create_dir_all(dir).unwrap();
+        git_on(dir, "2026-03-01", &["init", "-q"]);
+        commit(dir, "2026-03-01", &["main.rs"], "first");
+    }
+
+    /// The report for one note updated on 2026-03-02 with `entry` in its `repos:`, as
+    /// `(commits, subject of the newest)` when it is stale, and whether it could be checked.
+    fn checked(entry: &str, roots: &Path) -> (Option<(usize, String)>, bool) {
+        let notes = vec![("note.md".to_string(), vec![entry.to_string()], Some("2026-03-02".to_string()))];
+        let health = HealthCheck { broken: Vec::new(), orphans: Vec::new(), notes, roots: vec![roots.to_path_buf()] }.run();
+        (health.stale.first().map(|stale| (stale.commits, stale.newest.subject.clone())), health.unchecked.is_empty())
+    }
+
+    fn has_git() -> bool {
+        std::process::Command::new("git").arg("--version").output().is_ok()
+    }
+
+    #[test]
+    fn a_folder_inside_a_repository_is_not_taken_for_a_repository() {
+        if !has_git() {
+            return;
+        }
+        let roots = tempfile::tempdir().unwrap();
+        let charts = roots.path().join("charts");
+        repo(&charts);
+        commit(&charts, "2026-03-05", &["payment-service/Chart.yaml"], "chart");
+        assert_eq!(checked("charts", roots.path()), (Some((1, "chart".to_string())), true));
+        // Found by its name, and by its path: neither is the repository's root.
+        assert_eq!(checked("payment-service", roots.path()), (None, false));
+        assert_eq!(checked(charts.join("payment-service").to_str().unwrap(), roots.path()), (None, false));
+        // With a scope the folder is named as part of its repository.
+        assert_eq!(checked("charts:payment-service", roots.path()), (Some((1, "chart".to_string())), true));
+    }
+
+    #[test]
+    fn only_commits_on_the_default_branch_make_a_note_stale() {
+        if !has_git() {
+            return;
+        }
+        let roots = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let (origin, clone) = (outside.path().join("origin"), roots.path().join("app"));
+        repo(&origin);
+        git_on(roots.path(), "2026-03-01", &["clone", "-q", origin.to_str().unwrap(), "app"]);
+        // A feature branch, checked out and with a commit: `origin/HEAD` has none.
+        git_on(&clone, "2026-03-05", &["checkout", "-q", "-b", "feature"]);
+        commit(&clone, "2026-03-05", &["feature.rs"], "feature");
+        assert_eq!(checked("app", roots.path()), (None, true));
+        // A commit on the default branch counts once it is fetched, whatever is checked out.
+        commit(&origin, "2026-03-06", &["main.rs"], "on main");
+        assert_eq!(checked("app", roots.path()), (None, true));
+        git_on(&clone, "2026-03-06", &["fetch", "-q"]);
+        assert_eq!(checked("app", roots.path()), (Some((1, "on main".to_string())), true));
+
+        // Without `origin/HEAD` the checked-out commit is the default branch.
+        let local = roots.path().join("local");
+        repo(&local);
+        git_on(&local, "2026-03-05", &["checkout", "-q", "-b", "feature"]);
+        commit(&local, "2026-03-05", &["feature.rs"], "feature");
+        git_on(&local, "2026-03-05", &["checkout", "-q", "main"]);
+        assert_eq!(checked("local", roots.path()), (None, true));
+        commit(&local, "2026-03-07", &["main.rs"], "local main");
+        assert_eq!(checked("local", roots.path()), (Some((1, "local main".to_string())), true));
+    }
+
+    #[test]
+    fn notes_of_different_days_that_name_one_repository_each_get_their_own_count() {
+        if !has_git() {
+            return;
+        }
+        let roots = tempfile::tempdir().unwrap();
+        let app = roots.path().join("app");
+        repo(&app);
+        commit(&app, "2026-03-05", &["a.rs"], "a");
+        commit(&app, "2026-03-07", &["b.rs"], "b");
+        let note = |updated: &str| (format!("{updated}.md"), vec!["app".to_string()], Some(updated.to_string()));
+        let notes = ["2026-03-06", "2026-02-01", "2026-03-07", "2026-03-04"].map(note).to_vec();
+        let health = HealthCheck { broken: Vec::new(), orphans: Vec::new(), notes, roots: vec![roots.path().to_path_buf()] }.run();
+        let stale: Vec<(&str, usize, &str)> = health.stale.iter().map(|stale| (stale.updated.as_str(), stale.commits, stale.newest.subject.as_str())).collect();
+        assert_eq!(stale, [("2026-03-06", 1, "b"), ("2026-02-01", 3, "b"), ("2026-03-04", 2, "b")]);
+    }
+
+    #[test]
+    fn a_scope_counts_the_commits_under_a_folder_or_outside_it() {
+        assert!(scoped("app") == ("app", Scope::All));
+        assert!(scoped("app:api/v2/") == ("app", Scope::Only("api/v2".to_string())));
+        assert!(scoped("~/work/app:!docs") == ("~/work/app", Scope::Except("docs".to_string())));
+        assert!(scoped("app:") == ("app", Scope::All) && scoped("app:!") == ("app", Scope::All));
+        assert!(scoped("C:\\code\\app") == ("C:\\code\\app", Scope::All));
+        if !has_git() {
+            return;
+        }
+        let roots = tempfile::tempdir().unwrap();
+        let app = roots.path().join("app");
+        repo(&app);
+        commit(&app, "2026-03-05", &["api/a.rs"], "api");
+        commit(&app, "2026-03-06", &["docs/b.md"], "docs");
+        commit(&app, "2026-03-07", &["api/c.rs", "docs/c.md"], "both");
+        let found = |entry: &str| checked(entry, roots.path());
+        assert_eq!(found("app"), (Some((3, "both".to_string())), true));
+        assert_eq!(found("app:api"), (Some((2, "both".to_string())), true));
+        assert_eq!(found("app:docs/b.md"), (Some((1, "docs".to_string())), true));
+        assert_eq!(found("app:!api"), (Some((2, "both".to_string())), true));
+        assert_eq!(found("app:!docs"), (Some((2, "both".to_string())), true));
+        // A folder nothing changed in, one that is no pattern, and one that is not there.
+        assert_eq!(found("app:a*"), (None, true));
+        assert_eq!(found("app:web"), (None, true));
+        // The scope does not help to find the repository.
+        assert_eq!(found("nope:!api"), (None, false));
+    }
+
+    #[test]
+    fn a_commit_of_housekeeping_files_alone_makes_no_note_stale() {
+        if !has_git() {
+            return;
+        }
+        let roots = tempfile::tempdir().unwrap();
+        let app = roots.path().join("app");
+        repo(&app);
+        commit(&app, "2026-03-05", HOUSEKEEPING, "housekeeping");
+        assert_eq!(checked("app", roots.path()), (None, true));
+        assert_eq!(checked("app:!docs", roots.path()), (None, true));
+        // With code in the same commit it counts, and so does a file of that name in a folder.
+        commit(&app, "2026-03-06", &[".gitignore", "main.rs"], "code too");
+        assert_eq!(checked("app", roots.path()), (Some((1, "code too".to_string())), true));
+        commit(&app, "2026-03-07", &["web/.gitignore"], "inside web");
+        assert_eq!(checked("app", roots.path()), (Some((2, "inside web".to_string())), true));
     }
 }

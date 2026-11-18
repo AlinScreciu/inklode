@@ -181,7 +181,15 @@ pub fn call(core: &Mutex<Core>, name: &str, mut params: Value) -> Option<CallToo
     if let Some(arguments) = params.as_object_mut() {
         arguments.remove("own");
     }
-    Some(match core.lock().unwrap().call(def.call, params) {
+    // The health report runs git in every repository the notes name, which takes seconds: the
+    // core is let go of before that, so the app's window and other clients are not kept waiting.
+    let result = if def.call == "vault.health" {
+        let check = core.lock().unwrap().health_check();
+        check.map(|check| json!(check.run()))
+    } else {
+        core.lock().unwrap().call(def.call, params)
+    };
+    Some(match result {
         Ok(value) => CallToolResult::success(vec![ContentBlock::text(value.to_string())]),
         Err(error) => CallToolResult::error(vec![ContentBlock::text(error.to_string())]),
     })

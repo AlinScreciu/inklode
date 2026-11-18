@@ -13,6 +13,7 @@ mod vault;
 mod watch;
 
 pub use call::{ClaimCheck, Core};
+pub use health::{Health, HealthCheck};
 pub use vault::{Entry, Vault};
 
 #[derive(Debug, thiserror::Error)]

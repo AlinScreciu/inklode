@@ -158,6 +158,12 @@ impl Core {
         Ok(ClaimCheck { dir: self.state_dir.clone().ok_or(Error::NoStateFolder)?, vault: self.vault()?.clone() })
     }
 
+    /// What `vault.health` needs, to run its git part after the core is let go of.
+    pub fn health_check(&mut self) -> Result<health::HealthCheck, Error> {
+        let (_, index) = self.fresh()?;
+        Ok(health::check(index, health::roots()))
+    }
+
     /// Runs one named operation with JSON params and returns JSON.
     ///
     /// Paths are relative to the vault root and use forward slashes.
@@ -213,7 +219,7 @@ impl Core {
     /// | `search`         | `{query}`       | list of `{path, line, text}`, `line` 0 for a file-name match |
     /// | `config.list`    | none              | `{themes, snippets}`: names of the `.css` files in `.inklode/themes` and `.inklode/snippets`, without extension |
     /// | `vault.graph`    | none              | `{nodes, edges}`: every note as `{path, links}` (`links` counts its edges), and an edge `{from, to}` for each note that links to another |
-    /// | `vault.health`   | none              | `{broken, orphans, stale, unchecked}` (health.rs). `broken`: the notes with links or embeds that reach no note and no file, by path, each `{path, links}` with `links` as `{line, link, text}` (`link` is the text between the brackets). `orphans`: the paths of the notes with no link to another note and none from one. `stale`: `{path, updated, repo, dir, commits, newest}` for each note and entry of its frontmatter `repos:` whose repository has commits, on any branch, dated after the note's `updated:` day; `dir` is where the repository was found, `commits` how many there are and `newest` the last of them as `{date, rev, subject}` with the short hash. `unchecked`: `{path, repo, reason}` for a `repos:` entry that is no git repository, and with `repo` null for a note with `repos:` and no valid `updated:`. Runs `git log` in those repositories and writes nothing |
+    /// | `vault.health`   | none              | `{broken, orphans, stale, unchecked}` (health.rs). `broken`: the notes with links or embeds that reach no note and no file, by path, each `{path, links}` with `links` as `{line, link, text}` (`link` is the text between the brackets). `orphans`: the paths of the notes with no link to another note and none from one. `stale`: `{path, updated, repo, dir, commits, newest}` for each note and entry of its frontmatter `repos:` whose repository has commits on its default branch dated after the note's `updated:` day (an entry `name:dir` counts the commits under `dir`, `name:!dir` those outside it; commits of housekeeping files alone do not count); `repo` is the entry as written, `dir` the repository's root, `commits` how many there are and `newest` the last of them as `{date, rev, subject}` with the short hash. `unchecked`: `{path, repo, reason}` for a `repos:` entry that is not the root of a git repository, and with `repo` null for a note with `repos:` and no valid `updated:`. Runs `git log` in those repositories and writes nothing. A host that shares the core runs it as `Core::health_check` and `HealthCheck::run`, to let go of the core while git runs |
     /// | `vault.tasks`    | none              | list of `{path, tasks}`, by path: the notes with open checkboxes (`- [ ]`, also after `*`, `+`, `1.` and `1)`) outside fenced code blocks, `tasks` as `{line, text}` with `line` from 1 |
     /// | `git.log`        | `{path}`          | list of `{rev, author, date, subject}`: the commits that changed the file, newest first, through renames. `rev` is the full hash, `date` the author date as ISO 8601 |
     /// | `git.show`       | `{path, rev?}`    | `{content}`: the file's text in the commit `rev` (a hash of 4 to 64 hex digits, else `BadParams`), under the name it had then; without `rev`, in the last commit. Null when there is no such version |
@@ -292,10 +298,7 @@ impl Core {
                 let (_, index) = self.fresh()?;
                 Ok(json!(index.graph()))
             }
-            "vault.health" => {
-                let (_, index) = self.fresh()?;
-                Ok(json!(health::report(index, &health::roots())))
-            }
+            "vault.health" => Ok(json!(self.health_check()?.run())),
             "vault.tasks" => {
                 let (_, index) = self.fresh()?;
                 Ok(json!(index.tasks()))
@@ -1134,7 +1137,7 @@ mod tests {
         if std::process::Command::new("git").arg("--version").output().is_err() {
             return;
         }
-        // A repository with one commit at noon on 2026-03-01, local time, on a branch that is not checked out.
+        // A repository with a commit at noon on 2026-03-01, local time, and one more on a branch that is not checked out.
         let code = tempfile::tempdir().unwrap();
         let repo = code.path().join("app");
         fs::create_dir(&repo).unwrap();
@@ -1154,7 +1157,7 @@ mod tests {
         git_at(&["commit", "-q", "-am", "run it"]);
         git_at(&["checkout", "-q", "main"]);
         let refs = git_at(&["for-each-ref"]);
-        let short = git_at(&["rev-parse", "--short", "feature"]).trim().to_string();
+        let short = git_at(&["rev-parse", "--short", "main"]).trim().to_string();
         let path = repo.to_str().unwrap();
 
         let dir = tempfile::tempdir().unwrap();
@@ -1189,12 +1192,13 @@ mod tests {
         );
         assert_eq!(health["orphans"], json!(["Alone.md"]));
         // Only the note updated before the day of the commit: the day itself does not count.
+        // The commit on the branch that is not checked out does not count either.
         let dir_found = fs::canonicalize(&repo).unwrap();
         assert_eq!(health["stale"].as_array().unwrap().len(), 1, "{}", health["stale"]);
         let stale = &health["stale"][0];
-        assert_eq!((&stale["path"], &stale["updated"], &stale["repo"], &stale["commits"]), (&json!("Old.md"), &json!("2026-02-28"), &json!(path), &json!(2)));
+        assert_eq!((&stale["path"], &stale["updated"], &stale["repo"], &stale["commits"]), (&json!("Old.md"), &json!("2026-02-28"), &json!(path), &json!(1)));
         assert_eq!(fs::canonicalize(stale["dir"].as_str().unwrap()).unwrap(), dir_found);
-        assert_eq!(stale["newest"], json!({ "date": "2026-03-01", "rev": short, "subject": "run it" }));
+        assert_eq!(stale["newest"], json!({ "date": "2026-03-01", "rev": short, "subject": "first" }));
         assert_eq!(
             health["unchecked"],
             json!([
@@ -1203,6 +1207,13 @@ mod tests {
                 { "path": "No repo.md", "repo": "/no/such/folder", "reason": "not found or not a git repository" },
             ])
         );
+        // The report was taken out of the core before git ran: it is of the notes as they were
+        // then, and the core is free to work meanwhile.
+        let check = core.health_check().unwrap();
+        core.call("note.write", json!({ "path": "Old.md", "content": "No repos any more, see [[Hub]].\n" })).unwrap();
+        assert_eq!(json!(check.run())["stale"], health["stale"]);
+        assert_eq!(core.call("vault.health", Value::Null).unwrap()["stale"], json!([]));
+
         // Reading left the repository as it was.
         assert_eq!(git_at(&["for-each-ref"]), refs);
         assert_eq!(git_at(&["status", "--porcelain"]), "");
