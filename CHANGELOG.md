@@ -1,6 +1,19 @@
 # Changelog
 
-## 0.1.4
+## 0.2.0
+
+New:
+
+- Graph options, saved per vault: filters (tags as dots, attachments, link targets that name no note, notes without links), groups that colour the notes matching a query (`path:`, `tag:` or text in the name), display (arrows, when labels appear, dot size, line thickness) and the forces of the layout.
+- A local graph in the right sidebar: the open note and the notes within one to three links of it. It follows the note you switch to.
+- Three more tools in both MCP servers: `search_ranked` (the notes most relevant to a query, best first), `graph_note` (a note's links, backlinks, unresolved links and the notes near it) and `graph_path` (the shortest chain of links between two notes).
+- The app carries the headless MCP server, at `Inklode.app/Contents/MacOS/inklode-mcp`.
+- Zoom in, Zoom out and Reset zoom commands for the whole window (Cmd+=, Cmd+-, Cmd+0).
+
+Changed:
+
+- A pinch on the touchpad no longer zooms the whole window. It still zooms the graph and a drawing.
+- In the graph, drawings count as attachments and are hidden until "Attachments" is on.
 
 Fixes, found on a vault of 360 notes:
 
