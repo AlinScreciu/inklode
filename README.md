@@ -92,12 +92,13 @@ An app built this way still looks for updates from this repository's releases. A
 
 There are two servers; [docs/mcp.md](docs/mcp.md) lists the tools of both.
 
-**Headless, over stdio, for one vault.** The app does not need to run. Build the binary and register it:
+**Headless, over stdio, for one vault.** The app does not need to run. The released app carries the binary; register it:
 
 ```sh
-cargo build --release -p inklode-mcp
-claude mcp add inklode -- /absolute/path/to/inklode/target/release/inklode-mcp --vault /absolute/path/to/vault
+claude mcp add inklode -- /Applications/Inklode.app/Contents/MacOS/inklode-mcp --vault /absolute/path/to/vault
 ```
+
+From a clone, build it with `cargo build --release -p inklode-mcp` and name `target/release/inklode-mcp` instead.
 
 Another MCP client takes the same command line: the binary, then `--vault` and the vault's absolute path. Its tools read, search, write, create, rename and delete notes, and read backlinks, git history, the review inbox, vault health, open tasks and claims.
 

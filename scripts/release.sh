@@ -96,11 +96,19 @@ step "Build $PRODUCT $VERSION"
 # in tauri.conf.json), which notarization requires. The app needs no entitlements file: the webview's own
 # processes carry theirs, and the app asks for nothing the hardened runtime forbids.
 # The variables that make Tauri notarize by itself are taken away, so that it happens once, below.
+#
+# The headless MCP server goes into the app as Contents/MacOS/inklode-mcp, so an installed app brings it along
+# and Tauri signs it with the rest. Tauri wants such a binary under a name that ends in the target. It is named
+# in the configuration only here: a plain build or `pnpm tauri dev` would otherwise fail until it exists.
+cargo build --release -p inklode-mcp
+mkdir -p src-tauri/binaries
+cp target/release/inklode-mcp "src-tauri/binaries/inklode-mcp-$(rustc -vV | sed -n 's/^host: //p')"
 env -u APPLE_ID -u APPLE_PASSWORD -u APPLE_API_KEY -u APPLE_API_ISSUER -u APPLE_API_KEY_PATH \
-  pnpm tauri build --bundles app
+  pnpm tauri build --bundles app --config '{"bundle":{"externalBin":["binaries/inklode-mcp"]}}'
 
 BUILT="$ROOT/target/release/bundle/macos/$PRODUCT.app"
 [ -d "$BUILT" ] || die "the build did not make $BUILT"
+[ -x "$BUILT/Contents/MacOS/inklode-mcp" ] || die "the built app has no Contents/MacOS/inklode-mcp"
 BUILT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$BUILT/Contents/Info.plist")"
 [ "$BUILT_VERSION" = "$VERSION" ] || die "the built app says version $BUILT_VERSION, expected $VERSION"
 

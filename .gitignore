@@ -26,5 +26,6 @@ dist-ssr
 # Rust build output
 target
 
-# What scripts/release.sh makes: the files of a GitHub release
+# What scripts/release.sh makes: the files of a GitHub release, and the copy of inklode-mcp that Tauri bundles
 release/
+src-tauri/binaries/
