@@ -1,6 +1,7 @@
 use std::fs;
-use std::io::Write;
+use std::io::Write as _;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde::Serialize;
 
@@ -11,6 +12,81 @@ use crate::Error;
 #[derive(Clone)]
 pub struct Vault {
     root: PathBuf,
+}
+
+/// One file for `Vault::write_all`: its path, its whole new text, and `base` as `Vault::write_over` takes it.
+pub struct Write<'a> {
+    pub path: &'a str,
+    pub content: &'a str,
+    pub base: Option<&'a str>,
+}
+
+/// How many files `Vault::write_all` flushes at once. More than this gains little: 1556 files took
+/// 2.5 s with 4, 1.6 s with 8, 1.2 s with 16.
+const FLUSHERS: usize = 16;
+
+/// A file of `Vault::write_all` whose new text is in its temporary file.
+struct Staged {
+    /// The file's real path.
+    path: PathBuf,
+    tmp: PathBuf,
+}
+
+impl Staged {
+    /// The second pass: the temporary file is on the disk when this returns. It is opened
+    /// again for that, so that a thousand files are not all held open from the first pass on.
+    fn flush(&self) -> std::io::Result<()> {
+        fs::OpenOptions::new().write(true).open(&self.tmp)?.sync_all()
+    }
+
+    /// The third pass: the temporary file takes the file's place, unless the file is no
+    /// longer what `base` says, which is `false`.
+    fn land(&self, base: Option<&str>) -> std::io::Result<bool> {
+        // The rename replaces the file, so carry its permissions over.
+        if let Ok(meta) = fs::metadata(&self.path) {
+            fs::set_permissions(&self.tmp, meta.permissions())?;
+        }
+        if changed(&self.path, base)? {
+            return Ok(false);
+        }
+        fs::rename(&self.tmp, &self.path).map(|()| true)
+    }
+}
+
+/// Whether the file at `path` holds something else than `base`, the text a writer last read.
+/// A missing file counts as empty. Without a `base` nothing is asked.
+fn changed(path: &Path, base: Option<&str>) -> std::io::Result<bool> {
+    let Some(base) = base else { return Ok(false) };
+    match fs::read(path) {
+        Ok(now) => Ok(now != base.as_bytes()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(!base.is_empty()),
+        Err(e) => Err(e),
+    }
+}
+
+/// `work` for each of `items`, on up to `threads` threads at once, with the answers in the
+/// order of `items`. Every item is worked on, whatever the answer for another was.
+fn each<T: Sync, R: Send>(items: &[T], threads: usize, work: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let threads = threads.min(items.len());
+    if threads <= 1 {
+        return items.iter().map(work).collect();
+    }
+    // Each thread takes the next item nobody has taken, so a slow one holds up no other.
+    let next = AtomicUsize::new(0);
+    let mut answers: Vec<(usize, R)> = std::thread::scope(|scope| {
+        let take = || {
+            let mut mine = Vec::new();
+            loop {
+                let at = next.fetch_add(1, Ordering::Relaxed);
+                let Some(item) = items.get(at) else { return mine };
+                mine.push((at, work(item)));
+            }
+        };
+        let workers: Vec<_> = (0..threads).map(|_| scope.spawn(take)).collect();
+        workers.into_iter().flat_map(|worker| worker.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic))).collect()
+    });
+    answers.sort_by_key(|(at, _)| *at);
+    answers.into_iter().map(|(_, answer)| answer).collect()
 }
 
 /// One file or folder in the tree. `children` is present only for folders.
@@ -69,46 +145,54 @@ impl Vault {
     // last comparison and the rename (a few system calls) is still replaced; lock the
     // file or compare-and-swap through a hard link if two writers have to be exact.
     pub fn write_over(&self, rel: &str, content: &str, base: Option<&str>) -> Result<(), Error> {
-        let path = self.resolve(rel)?;
-        let changed = || -> std::io::Result<bool> {
-            let Some(base) = base else { return Ok(false) };
-            match fs::read(&path) {
-                Ok(now) => Ok(now != base.as_bytes()),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(!base.is_empty()),
-                Err(e) => Err(e),
+        self.write_all(&[Write { path: rel, content, base }]).pop().expect("one answer per file")
+    }
+
+    /// `write_over` for many files at once, with the answer for each in their order. A file
+    /// that cannot be written keeps what it had and does not stop the others. No two of
+    /// `files` may have the same path.
+    ///
+    /// Each file is written as one alone is: to a temporary file, which is flushed to the
+    /// disk and then takes the file's place. The three steps are three passes over all the
+    /// files, because the flush is nearly all of the time and the disk answers several
+    /// that wait together sooner than the same ones in a row: 1556 notes took 6.8 s one by
+    /// one and 1.2 s this way (an Apple SSD, where the flush is `F_FULLFSYNC`).
+    pub fn write_all(&self, files: &[Write]) -> Vec<Result<(), Error>> {
+        let staged: Vec<Result<Staged, Error>> = files.iter().map(|file| self.stage(file)).collect();
+        let flushed = each(&staged, FLUSHERS, |staged| staged.as_ref().map_or(Ok(()), Staged::flush));
+        let land = |((staged, flushed), file): ((Result<Staged, Error>, std::io::Result<()>), &Write)| {
+            let staged = staged?;
+            // Checked once more right before the file is replaced, when the slow part is done.
+            let landed = flushed.and_then(|()| staged.land(file.base));
+            if !matches!(landed, Ok(true)) {
+                let _ = fs::remove_file(&staged.tmp);
+            }
+            match landed {
+                Ok(true) => Ok(()),
+                Ok(false) => Err(Error::Conflict(file.path.to_string())),
+                Err(e) => Err(io_err(&staged.path, e)),
             }
         };
-        // Checked once before anything is touched, so a refused write makes no folder either.
-        if changed().map_err(|e| io_err(&path, e))? {
-            return Err(Error::Conflict(rel.to_string()));
+        staged.into_iter().zip(flushed).zip(files).map(land).collect()
+    }
+
+    /// The first pass of `write_all` for one file: its text is in its temporary file, which
+    /// is not flushed yet. Nothing is made, not a folder either, for a file that is not what `base` says.
+    fn stage(&self, file: &Write) -> Result<Staged, Error> {
+        let path = self.resolve(file.path)?;
+        if changed(&path, file.base).map_err(|e| io_err(&path, e))? {
+            return Err(Error::Conflict(file.path.to_string()));
         }
         let dir = path.parent().unwrap_or(&self.root);
         fs::create_dir_all(dir).map_err(|e| io_err(dir, e))?;
-
         let file_name = path.file_name().unwrap_or_default().to_string_lossy();
         let tmp = dir.join(format!(".{file_name}.inklode-tmp"));
-        let result = (|| {
-            let mut file = fs::File::create(&tmp)?;
-            file.write_all(content.as_bytes())?;
-            file.sync_all()?;
-            // The rename replaces the file, so carry its permissions over.
-            if let Ok(meta) = fs::metadata(&path) {
-                fs::set_permissions(&tmp, meta.permissions())?;
-            }
-            // And once more right before the file is replaced, when the slow part is done.
-            if changed()? {
-                return Ok(false);
-            }
-            fs::rename(&tmp, &path).map(|()| true)
-        })();
-        if !matches!(result, Ok(true)) {
+        let written = fs::File::create(&tmp).and_then(|mut to| to.write_all(file.content.as_bytes()));
+        if let Err(e) = written {
             let _ = fs::remove_file(&tmp);
+            return Err(io_err(&path, e));
         }
-        match result {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(Error::Conflict(rel.to_string())),
-            Err(e) => Err(io_err(&path, e)),
-        }
+        Ok(Staged { path, tmp })
     }
 
     /// Makes a new file, and the folders above it. Fails with `Exists` when
@@ -408,6 +492,65 @@ mod tests {
         fs::write(dir.path().join(".obsidian/app.json"), "{}").unwrap();
         let vault = Vault::open(dir.path()).unwrap();
         (dir, vault)
+    }
+
+    #[test]
+    fn many_files_written_at_once_are_each_written_or_left_as_they_were() {
+        let (dir, vault) = sample();
+        // More files than are flushed at once, so every thread has some.
+        let count = 5 * FLUSHERS + 3;
+        let paths: Vec<String> = (0..count).map(|n| format!("Many/{}/note {n}.md", n % 7)).collect();
+        let old = |n: usize| format!("old {n}\n");
+        let new = |n: usize| format!("new {n}\n{}", "more text\n".repeat(n));
+        for (n, path) in paths.iter().enumerate().filter(|(n, _)| n % 2 == 0) {
+            fs::create_dir_all(dir.path().join(path).parent().unwrap()).unwrap();
+            fs::write(dir.path().join(path), old(n)).unwrap();
+        }
+        let texts: Vec<(String, String)> = (0..count).map(|n| (old(n), new(n))).collect();
+        // Every second file is there and is written over what it has, the others are new. Three cannot be
+        // written: one is not what its `base` says, one should be there and is not, one has a path out of the vault.
+        let (stale, missing, outside) = (4, 9, 16);
+        let files: Vec<Write> = (0..count)
+            .map(|n| {
+                let base = if n == stale { Some("something else") } else if n % 2 == 0 || n == missing { Some(texts[n].0.as_str()) } else { None };
+                Write { path: if n == outside { "../out.md" } else { &paths[n] }, content: &texts[n].1, base }
+            })
+            .collect();
+        let answers = vault.write_all(&files);
+        assert_eq!(answers.len(), count);
+        for (n, answer) in answers.iter().enumerate() {
+            let now = fs::read_to_string(dir.path().join(&paths[n])).ok();
+            if n == stale {
+                assert!(matches!(answer, Err(Error::Conflict(path)) if *path == paths[n]), "{n}");
+                assert_eq!(now, Some(old(n)));
+            } else if n == missing {
+                assert!(matches!(answer, Err(Error::Conflict(_))), "{n}");
+                assert_eq!(now, None);
+            } else if n == outside {
+                assert!(matches!(answer, Err(Error::BadPath(_))), "{n}");
+            } else {
+                assert!(answer.is_ok(), "{n}: {answer:?}");
+                assert_eq!(now, Some(new(n)), "{n}");
+            }
+        }
+        // No temporary file is left, of a file that was written or of one that was not.
+        fn left(dir: &Path, found: &mut Vec<PathBuf>) {
+            for entry in fs::read_dir(dir).unwrap().flatten() {
+                if entry.path().is_dir() {
+                    left(&entry.path(), found);
+                } else if entry.file_name().to_string_lossy().ends_with(".inklode-tmp") {
+                    found.push(entry.path());
+                }
+            }
+        }
+        let mut found = Vec::new();
+        left(dir.path(), &mut found);
+        assert_eq!(found, Vec::<PathBuf>::new());
+        assert!(!dir.path().parent().unwrap().join("out.md").exists());
+        // No file is no work, and one file is `write_over`.
+        assert!(vault.write_all(&[]).is_empty());
+        vault.write_over(&paths[0], "again\n", Some(&new(0))).unwrap();
+        assert_eq!(fs::read_to_string(dir.path().join(&paths[0])).unwrap(), "again\n");
     }
 
     #[test]
