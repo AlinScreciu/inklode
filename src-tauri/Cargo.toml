@@ -5,7 +5,6 @@ license = "MIT"
 description = "Inklode desktop shell: the window and the bridge from the UI to inklode-core."
 authors = ["Alin Screciu"]
 repository = "https://github.com/AlinScreciu/inklode"
-homepage = "https://github.com/AlinScreciu/inklode"
 keywords = ["markdown", "notes", "tauri", "local-first", "obsidian"]
 edition = "2024"
 

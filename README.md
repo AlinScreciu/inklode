@@ -70,9 +70,9 @@ The comment at the end of the line is the evidence. The rendered note shows a st
 
 Prerequisites, with the versions this was built and tested with:
 
-- Rust 1.93.1 (stable). The crates use edition 2024, which needs Rust 1.85 or newer.
+- Rust 1.100.0 (stable). The crates use edition 2024, which needs Rust 1.85 or newer.
 - Node.js 24.10. The UI self-checks import `.ts` files directly, so they need a Node that strips types on import without a flag.
-- pnpm 10.32; CI uses pnpm 12. Both read the lockfile, which is version 9.0.
+- pnpm 12.21 (the lockfile is version 9.0; pnpm 10 reads it too).
 - On macOS, the Xcode Command Line Tools. For other systems see the [Tauri prerequisites](https://tauri.app/start/prerequisites/); those platforms are untested.
 - Optional at run time: `git` on the `PATH` for the history, review and health modules.
 

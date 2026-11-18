@@ -6,7 +6,6 @@ edition = "2024"
 description = "Inklode's vault logic. No UI and no Tauri dependency, so the MCP server and tests can use it headless."
 authors = ["Alin Screciu"]
 repository = "https://github.com/AlinScreciu/inklode"
-homepage = "https://github.com/AlinScreciu/inklode"
 keywords = ["markdown", "notes", "vault", "local-first", "obsidian"]
 
 [dependencies]

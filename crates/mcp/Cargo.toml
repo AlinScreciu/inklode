@@ -6,7 +6,6 @@ edition = "2024"
 description = "Headless MCP server over stdio for one Inklode vault. No UI and no Tauri dependency."
 authors = ["Alin Screciu"]
 repository = "https://github.com/AlinScreciu/inklode"
-homepage = "https://github.com/AlinScreciu/inklode"
 keywords = ["markdown", "notes", "mcp", "local-first", "obsidian"]
 
 [dependencies]
