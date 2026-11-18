@@ -415,9 +415,33 @@ export function mockCall(name: string, params: Record<string, unknown>): unknown
         }
       }
       const list = [...edges.values()];
+      // shortcut: the mock reads tags from `tags: [a, b]` in the frontmatter and `#tag` anywhere, code included,
+      // and finds a file only by the path as written; the real core reads the other forms and looks beside the note.
+      const tagsOf = (text: string) => {
+        const listed = /^---\n[\s\S]*?^tags: \[([^\]]*)\]/m.exec(text)?.[1].split(",").map((t) => t.trim()) ?? [];
+        const inline = [...text.matchAll(/(?:^|\s)#([\p{L}\d_/-]*[\p{L}_-][\p{L}\d_/-]*)/gu)].map((m) => m[1]);
+        return [...new Set([...listed, ...inline].filter(Boolean))];
+      };
+      const unresolved = new Map<string, { name: string; from: number[] }>();
+      const attachments = new Map<string, number[]>();
+      notes.forEach((from, at) => {
+        for (const m of files.get(from)!.matchAll(LINK)) {
+          if (resolve(m[1], from) !== null) continue;
+          const name = target(m[1]);
+          const entry = assets.has(name)
+            ? (attachments.get(name) ?? attachments.set(name, []).get(name)!)
+            : (unresolved.get(name.toLowerCase()) ?? unresolved.set(name.toLowerCase(), { name, from: [] }).get(name.toLowerCase())!).from;
+          if (!entry.includes(at)) entry.push(at);
+        }
+      });
       return {
-        nodes: notes.map((path) => ({ path, links: list.filter((e) => e.from === path || e.to === path).length })),
+        nodes: notes.map((path) => {
+          const tags = tagsOf(files.get(path)!);
+          return { path, links: list.filter((e) => e.from === path || e.to === path).length, ...(tags.length ? { tags } : {}) };
+        }),
         edges: list,
+        unresolved: [...unresolved.keys()].sort().map((key) => unresolved.get(key)!),
+        attachments: [...attachments.keys()].sort().map((path) => ({ path, from: attachments.get(path)! })),
       };
     }
     // shortcut: the mock reads links and checkboxes in code blocks too, takes an embed of a file for a broken

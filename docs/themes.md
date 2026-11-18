@@ -214,6 +214,18 @@ The canvas reads these, and again when the theme changes.
 | `--graph-label-halo` | `→ bg` | Outline around each name, so it reads over lines and dots. |
 | `--graph-bg` | `→ bg` | The canvas. |
 | `--graph-node-size` | `4px` | Radius of the dot of a note without links. Dots grow with the number of links. |
+| `--graph-tag` | `→ syntax-string` | A tag's dot. |
+| `--graph-attachment` | `→ syntax-number` | The dot of a file that is not a note, and of a drawing. |
+| `--graph-unresolved` | `→ text-faint` | The ring of a link target that reaches nothing. |
+| `--graph-group-1` | `→ error` | The red a group of notes can have (the colours are in the picker in this order). |
+| `--graph-group-2` | `→ syntax-number` | The orange a group of notes can have. |
+| `--graph-group-3` | `syntax-number` mixed with `syntax-string` | The olive a group of notes can have. |
+| `--graph-group-4` | `→ syntax-string` | The green a group of notes can have. |
+| `--graph-group-5` | `→ syntax-type` | The cyan a group of notes can have. |
+| `--graph-group-6` | `→ syntax-function` | The blue a group of notes can have. |
+| `--graph-group-7` | `syntax-function` mixed with `syntax-keyword` | The purple a group of notes can have. |
+| `--graph-group-8` | `→ syntax-keyword` | The pink a group of notes can have. |
+| `--graph-options-width` | `264px` | Width of the options panel over a graph, where the pane is wide enough. |
 
 ### Comparisons and the history margin
 

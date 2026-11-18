@@ -148,7 +148,7 @@ fn heading(line: &str) -> Option<&str> {
 /// The values of `aliases` and of `tags` in a note's frontmatter, each as one text to take
 /// the words of. Read line by line as health.rs reads `repos`, not as full YAML:
 /// `key: value`, `key: [a, b]` and `- item` lines under the key, without a trailing `# comment`.
-fn meta(text: &str) -> (String, String) {
+pub(crate) fn meta(text: &str) -> (String, String) {
     let (mut aliases, mut tags) = (String::new(), String::new());
     let mut lines = text.lines();
     if lines.next().map(str::trim_end) != Some("---") {

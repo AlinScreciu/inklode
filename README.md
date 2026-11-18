@@ -44,7 +44,7 @@ Everything beyond the base app is a module that can be switched on or off per va
 | Module | Id | Default | What it adds |
 |---|---|---|---|
 | Excalidraw drawings | `excalidraw` | on | `<name>.excalidraw.md` files open in an Excalidraw canvas, in the Obsidian Excalidraw plugin's uncompressed format, and can be embedded in notes and presented as slides. |
-| Graph view | `graph` | on | Every note as a dot and every link as a line (`Mod+G`). |
+| Graph view | `graph` | on | Every note as a dot and every link as a line (`Mod+G`), and a local graph of the active note in the right sidebar, both with filters, colour groups and layout options. |
 | Tables | `tables` | on | Pipe tables shown and edited as tables in Live Preview. |
 | Git history | `history` | off | A note's commits, a comparison with any version, restore, and a blame margin. Git is only read. |
 | Merge | `merge` | off | A three-way merge when a note changed on disk under an unsaved edit and the two changes are in different parts of the note. |

@@ -1,7 +1,7 @@
 //! The in-memory note index: wikilink parsing and resolution, backlinks,
 //! search, and the link rewriting behind a rename.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Range;
 
 use serde::Serialize;
@@ -44,6 +44,10 @@ pub struct Graph {
     pub nodes: Vec<Node>,
     /// Sorted by `from`, then `to`. A pair of notes that link to each other has two.
     pub edges: Vec<Edge>,
+    /// The link targets that reach no note and no file, sorted by name without case.
+    pub unresolved: Vec<Unresolved>,
+    /// The files that are not notes and that a note links to or embeds, sorted by path.
+    pub attachments: Vec<Attachment>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -51,6 +55,26 @@ pub struct Node {
     pub path: String,
     /// How many edges start or end at this note.
     pub links: usize,
+    /// The note's tags (`tags`), left out of the answer when it has none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+}
+
+/// A link target that reaches nothing, in `vault.graph`.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct Unresolved {
+    /// As first written (without `#heading` and `|alias`). Spellings that differ only in case are one target.
+    pub name: String,
+    /// The notes that have such a link, as positions in `nodes`, sorted.
+    pub from: Vec<usize>,
+}
+
+/// A file that is not a note, in `vault.graph`.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct Attachment {
+    pub path: String,
+    /// The notes that link to it or embed it, as positions in `nodes`, sorted.
+    pub from: Vec<usize>,
 }
 
 /// A link from the note at `from` to the note at `to`.
@@ -299,41 +323,74 @@ impl Index {
         self.notes.iter().find(|n| n.path == path).map_or("", |n| n.content.as_str())
     }
 
-    /// The note a link points to, or else the file it embeds. A file is looked
-    /// for where the editor looks for an image: next to the note, then from the
-    /// vault root (a leading slash is the root only).
-    fn file_of(&self, link: &str, from: &str) -> Option<&str> {
-        self.resolve(link, from).or_else(|| {
-            let target = target(link).trim().to_lowercase();
-            let beside = format!("{}/{target}", folder(from).to_lowercase());
-            let found = self.files.get(&beside).or_else(|| self.files.get(target.trim_start_matches('/')));
-            found.map(String::as_str)
-        })
+    /// The file that is not a note which a link embeds. A file is looked for where the
+    /// editor looks for an image: next to the note, then from the vault root (a leading
+    /// slash is the root only).
+    fn file(&self, link: &str, from: &str) -> Option<&str> {
+        let target = target(link).trim().to_lowercase();
+        let beside = format!("{}/{target}", folder(from).to_lowercase());
+        let found = self.files.get(&beside).or_else(|| self.files.get(target.trim_start_matches('/')));
+        found.map(String::as_str)
     }
 
-    /// The notes and the links between them, for the graph view. Every note is a
-    /// node. A link that resolves to another note is an edge; links that repeat,
-    /// point nowhere or point into their own note are left out.
-    pub fn graph(&self) -> Graph {
-        let mut edges = BTreeSet::new();
-        for note in &self.notes {
-            for link in links(&note.content) {
-                match self.resolve(&note.content[link.inner], &note.path) {
-                    Some(to) if to != note.path => edges.insert(Edge { from: note.path.clone(), to: to.to_string() }),
-                    _ => false,
-                };
+    /// The note a link points to, or else the file it embeds.
+    fn file_of(&self, link: &str, from: &str) -> Option<&str> {
+        self.resolve(link, from).or_else(|| self.file(link, from))
+    }
+
+    /// What the links and embeds of `note` reach other than notes: the files, by path,
+    /// sorted and each once, and the targets that reach nothing, as `unresolved` lists them.
+    fn beyond(&self, note: &Note) -> (Vec<&str>, Vec<String>) {
+        let (mut files, mut lost): (Vec<&str>, Vec<String>) = (Vec::new(), Vec::new());
+        for link in links(&note.content) {
+            let inner = &note.content[link.inner];
+            if self.resolve(inner, &note.path).is_some() {
+                continue;
+            }
+            let name = target(inner).trim();
+            match self.file(inner, &note.path) {
+                Some(file) => files.push(file),
+                None if !lost.iter().any(|seen| seen.to_lowercase() == name.to_lowercase()) => lost.push(name.to_string()),
+                None => {}
             }
         }
-        let mut links_of: HashMap<&str, usize> = HashMap::new();
-        for end in edges.iter().flat_map(|e| [&e.from, &e.to]) {
-            *links_of.entry(end).or_default() += 1;
+        files.sort_unstable();
+        files.dedup();
+        (files, lost)
+    }
+
+    /// The notes and what they link to, for the graph view. Every note is a node, with
+    /// its tags. A link that resolves to another note is an edge (`adjacency`); links that
+    /// repeat or point into their own note are left out. Targets that reach nothing and
+    /// files that are not notes are listed apart, each with the notes that link to it.
+    pub fn graph(&self) -> Graph {
+        let out = self.adjacency();
+        let mut links_of = vec![0; self.notes.len()];
+        let mut edges = Vec::new();
+        for (from, to) in out.iter().enumerate().flat_map(|(from, to)| to.iter().map(move |to| (from, *to))) {
+            links_of[from] += 1;
+            links_of[to] += 1;
+            edges.push(Edge { from: self.notes[from].path.clone(), to: self.notes[to].path.clone() });
         }
-        let nodes = self
-            .notes
-            .iter()
-            .map(|n| Node { path: n.path.clone(), links: links_of.get(n.path.as_str()).copied().unwrap_or(0) })
-            .collect();
-        Graph { nodes, edges: edges.into_iter().collect() }
+        // By the name without case, with the spelling met first.
+        let mut lost: BTreeMap<String, Unresolved> = BTreeMap::new();
+        let mut files: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+        for (at, note) in self.notes.iter().enumerate() {
+            let (embedded, missing) = self.beyond(note);
+            for file in embedded {
+                files.entry(file).or_default().push(at);
+            }
+            for name in missing {
+                lost.entry(name.to_lowercase()).or_insert_with(|| Unresolved { name, from: Vec::new() }).from.push(at);
+            }
+        }
+        let nodes = self.notes.iter().zip(links_of).map(|(n, links)| Node { path: n.path.clone(), links, tags: tags(&n.content) }).collect();
+        Graph {
+            nodes,
+            edges,
+            unresolved: lost.into_values().collect(),
+            attachments: files.into_iter().map(|(path, from)| Attachment { path: path.to_string(), from }).collect(),
+        }
     }
 
     /// For each note, in the order of `paths`: the positions in that order of the other
@@ -362,16 +419,7 @@ impl Index {
     /// no file, as written (without `#heading` and `|alias`), in the order they first
     /// appear. A target written again, in any case, is listed once.
     pub fn unresolved(&self, path: &str) -> Vec<String> {
-        let content = self.content(path);
-        let mut lost: Vec<String> = Vec::new();
-        for link in links(content) {
-            let inner = &content[link.inner];
-            let name = target(inner).trim();
-            if self.file_of(inner, path).is_none() && !lost.iter().any(|seen| seen.to_lowercase() == name.to_lowercase()) {
-                lost.push(name.to_string());
-            }
-        }
-        lost
+        self.notes.iter().find(|n| n.path == path).map_or_else(Vec::new, |note| self.beyond(note).1)
     }
 
     /// The links and embeds that reach no note and no file, grouped by the note they
@@ -531,6 +579,52 @@ fn links(content: &str) -> Vec<Link<'_>> {
     out
 }
 
+/// A note's tags, without `#`, in the order they first appear and each once whatever its
+/// case: the `tags` of the frontmatter (as `rank::meta` reads them) and every `#tag` in the
+/// text outside code. A `#tag` starts a line or follows a space, is made of letters, digits,
+/// `_`, `-` and `/`, and is not a number.
+pub(crate) fn tags(content: &str) -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    let mut add = |tag: &str| {
+        let tag = tag.trim_matches('/');
+        if !tag.is_empty() && !found.iter().any(|seen| seen.to_lowercase() == tag.to_lowercase()) {
+            found.push(tag.to_string());
+        }
+    };
+    let (_, listed) = crate::rank::meta(content);
+    let between = |c: char| c.is_whitespace() || matches!(c, '[' | ']' | ',' | '"' | '\'');
+    listed.split(between).for_each(|word| add(word.trim_start_matches(['-', '#'])));
+    // The frontmatter's lines are not text: a colour there (`#fff`) is no tag.
+    let body = frontmatter_lines(content);
+    for (_, _, line) in unfenced(content).filter(|(number, _, _)| *number > body) {
+        let mut code = false;
+        let mut before = ' ';
+        let mut rest = line.char_indices();
+        while let Some((at, c)) = rest.next() {
+            if c == '`' {
+                code = !code;
+            } else if c == '#' && !code && before.is_whitespace() {
+                let name = &line[at + 1..];
+                let end = name.find(|c: char| !(c.is_alphanumeric() || matches!(c, '_' | '-' | '/'))).unwrap_or(name.len());
+                if name[..end].chars().any(|c| !c.is_ascii_digit() && c != '/') {
+                    add(&name[..end]);
+                }
+            }
+            before = c;
+        }
+    }
+    found
+}
+
+/// How many lines the frontmatter of a note takes, with both `---` lines. 0 without one.
+fn frontmatter_lines(content: &str) -> usize {
+    let mut lines = content.lines();
+    if lines.next().map(str::trim_end) != Some("---") {
+        return 0;
+    }
+    lines.position(|line| line.trim_end() == "---").map_or(0, |at| at + 2)
+}
+
 /// The text of an open checkbox line: `- [ ] text`, with `*`, `+`, `1.` or `1)` as the
 /// list marker too, indented or not. `None` for any other line, a ticked one included.
 fn open_task(line: &str) -> Option<&str> {
@@ -657,6 +751,33 @@ mod tests {
         assert_eq!(nodes, [("Home.md", 2), ("Lone.md", 0), ("sub/a.md", 3), ("sub/b.md", 1)]);
         let edges: Vec<_> = graph.edges.iter().map(|e| (e.from.as_str(), e.to.as_str())).collect();
         assert_eq!(edges, [("Home.md", "sub/a.md"), ("sub/a.md", "Home.md"), ("sub/a.md", "sub/b.md")]);
+        assert_eq!(graph.unresolved, [Unresolved { name: "Missing".into(), from: vec![0] }]);
+        assert_eq!(graph.attachments, []);
+    }
+
+    #[test]
+    fn graph_lists_tags_unresolved_targets_and_attachments() {
+        let notes = vec![
+            Note { key: key("a.md"), path: "a.md".into(), content: "---\ntags: [Work, idea]\n---\n#work and #2026 ![[pic.png]] [[Gone#h|x]] [[gone]]\n".into() },
+            Note { key: key("sub/b.md"), path: "sub/b.md".into(), content: "![[pic.png]] ![[near.png]] [[GONE]] [[Also gone]] [[a]]\n".into() },
+        ];
+        let files = HashMap::from([("pic.png".to_string(), "pic.png".to_string()), ("sub/near.png".to_string(), "sub/near.png".to_string()), ("unused.pdf".to_string(), "unused.pdf".to_string())]);
+        let graph = Index::new(notes, files).graph();
+        assert_eq!(graph.nodes[0].tags, ["Work", "idea"]);
+        assert!(graph.nodes[1].tags.is_empty());
+        assert_eq!(graph.unresolved, [Unresolved { name: "Also gone".into(), from: vec![1] }, Unresolved { name: "Gone".into(), from: vec![0, 1] }]);
+        // A file no note links to is not listed.
+        assert_eq!(graph.attachments, [Attachment { path: "pic.png".into(), from: vec![0, 1] }, Attachment { path: "sub/near.png".into(), from: vec![1] }]);
+        // A note without tags has no `tags` in the answer, which keeps it short.
+        assert_eq!(serde_json::to_value(&graph.nodes[1]).unwrap(), serde_json::json!({ "path": "sub/b.md", "links": 1 }));
+    }
+
+    #[test]
+    fn tags_come_from_the_frontmatter_and_from_the_text() {
+        assert_eq!(tags("---\ntags:\n  - one\n  - \"#two\"\ncolor: #fff\n---\n# Title\n#three, (#no) x#no #a/b #One #12 `#code`\n```\n#fenced\n```\n"), ["one", "two", "three", "a/b"]);
+        assert_eq!(tags("---\ntags: solo\n---\n"), ["solo"]);
+        assert_eq!(tags("#Start of a line, [[Note#heading]] and https://x.dev/#top\n"), ["Start"]);
+        assert!(tags("no tags\n").is_empty());
     }
 
     #[test]

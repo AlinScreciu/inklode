@@ -27,14 +27,59 @@ The `excalidraw` module. A file named `<name>.excalidraw.md` opens in an Excalid
 
 ## Graph view
 
-The `graph` module. "Open graph view" (`graph.open`, `Mod+G`) shows every note of the vault as a dot and every link between two notes as a line, in place of the editor. Opening a note leaves it.
+The `graph` module. It has two graphs, each with its own options.
 
-- A dot grows with the note's number of links, in plus out. The note that was open is marked in the accent colour. Zoomed out, only the most linked notes keep their label. A label that would cover another is left out; the pointed-at note, the marked note, the pointed-at note's neighbours and then the notes with the most links get their place first.
-- Drag the background to pan, turn the wheel or pinch to zoom, drag a dot to move it. Pointing at a dot dims all but that note and the notes linked with it. A click on a dot opens the note.
-- The field at the top left shows only the notes whose name contains its text (`graph.filter {text}`).
-- It follows changes in the vault, and keeps the view and the notes' places when it does.
-- The data is the core operation `vault.graph`: `{nodes: [{path, links}], edges: [{from, to}]}`, with only links that resolve to another note, each pair of notes once per direction.
-- The colours and sizes are the `--graph-*` variables at the top of `src/app.css`.
+- "Open graph view" (`graph.open`, `Mod+G`) shows every note of the vault as a dot and every link between two notes as a line, in place of the editor. Opening a note leaves it. The note that was open is marked in the accent colour.
+- "Open local graph" (`graph.local`, the second graph button in the ribbon) opens a panel in the right sidebar, in place of the outline, with the active note and what is within a few links of it, whichever way a link points. "Depth" says how many links, 1 to 3. It follows the active note: when another note is shown, the graph is that note's. The note is marked, and a dot's size counts the links drawn, so a hub of the vault with one link here is small.
+
+In both:
+
+- A dot grows with the number of links it has among what shows. Zoomed out, only the most linked notes keep their label, and a label fades in as its dot nears the size that gives it one ("Text fade threshold" moves that size). A label that would cover another is left out; the pointed-at note, the marked note, the pointed-at note's neighbours and then the notes with the most links get their place first.
+- Drag the background to pan, turn the wheel or pinch to zoom, drag a dot to move it. Pointing at a dot dims all but that dot and what is linked with it. A click on a note or a file opens it; a tag and a link target without a note open nothing.
+- It follows changes in the vault, and keeps the view and the dots' places when it does.
+- The button at the top right opens the options, and Escape or the button closes them:
+
+| Section | Option (`graph.set` name) | What |
+|---|---|---|
+| Filters | name filter (`filter`) | Only what has the text in its name shows, without case. |
+| | Depth (`depth`, 1 to 3, default 1) | The local graph only. |
+| | Tags (`tags`, default off) | Each tag is a dot (in `--graph-tag`), linked with the notes that carry it: the frontmatter's `tags` and every `#tag` in the text. Tags that differ only in case are one. |
+| | Attachments (`attachments`, off) | The files that are not notes and that a note links to or embeds (images), and drawings (`.excalidraw.md`), are dots (in `--graph-attachment`). |
+| | Existing files only (`existingOnly`, on) | Off: a link target that reaches no note and no file is a dot too, drawn as a ring. |
+| | Orphans (`orphans`, on) | Off: notes without any link that shows are hidden. |
+| Groups | `groups`, a list of `{query, colour}` | A note or file that matches a group's query is drawn in the group's colour, one of eight (`colour` 1 to 8: red, orange, olive, green, cyan, blue, purple, pink; `--graph-group-1` to `--graph-group-8`). The first group that matches wins. |
+| Display | Arrows (`arrows`, off) | An arrowhead where a link points to. Zoomed far out they are not drawn. |
+| | Text fade threshold (`textFade`, -3 to 3, default 0) | Each step up doubles the zoom a label needs; down, halves it. |
+| | Node size (`nodeSize`, 0.25 to 4, default 1), Link thickness (`linkThickness`, 0.25 to 5, default 1) | Multiply the dots' size and the lines' width. |
+| Forces | Centre force (`centerForce`, 0 to 0.5, default 0.06) | The pull to the middle. |
+| | Repel force (`repelForce`, 0 to 1000, default 220) | How hard dots push each other away. |
+| | Link force (`linkForce`, 0 to 2, default 1) | How hard a link pulls its ends together. |
+| | Link distance (`linkDistance`, 10 to 300, default 70) | The length a link wants to have. |
+
+- A group's query is words separated by spaces, all of which have to match, without case: a plain word matches when the note's name contains it, `path:Folder/Sub` when its path starts with that, `tag:name` (or `tag:#name`) when it has that tag or one under it (`name/sub`). A word with a space goes in quotes: `path:"My Folder"`. An empty query matches nothing.
+- The defaults are the graph as it was before it had options, except that a drawing now counts as an attachment and so is hidden until "Attachments" is on. The button in the options' header puts every option back to its default.
+- The options are the vault's, in `.inklode/graph.json` as `{"full": {…}, "local": {…}}` with the names above, written half a second after the last change and read when a graph opens and when files change. A missing file, a file that is not JSON and a value an option does not take mean the default.
+- A display option, a group and the name filter only paint again. A force changes the running layout and warms it up. A filter that adds or removes dots hands the layout the new set, and every dot that was there keeps its place.
+
+| Command | What |
+|---|---|
+| `graph.open` | Shows the full graph in the active tab. Key: `Mod+G`. |
+| `graph.local {open?}` | Opens the local graph in the right sidebar, or closes it when it is open. |
+| `graph.set {option, value, graph?}` | Sets one option by its name in the table above. A number outside its range is brought to the nearest end; another kind of value is an error that says what the option takes. `graph` is `"full"` or `"local"`; without it, the full graph if it shows, else the local one if that shows, else the full one. The graph need not be open. Without params it opens the options panel. |
+| `graph.filter {text, graph?}` | Sets the name filter (the same as `graph.set {option: "filter"}`). Without `text` it opens the options, where the filter field takes the keyboard. |
+| `graph.addGroup {query?, colour?, graph?}` | Adds a group at the end. Without `colour`, the one after the last group's. |
+| `graph.removeGroup {index?, graph?}` | Removes the group at that position, from 0. Without `index`, the last one. |
+| `graph.reset {graph?}` | Puts every option of that graph back to its default. |
+| `graph.options {open?, graph?}` | Opens the options panel of a graph that is on screen, or closes it with `{open: false}`. |
+| `graph.zoom {zoom?, graph?}` | Zooms a graph that is on screen to that level around the middle of its pane (1 is the size the layout is made at). Without `zoom`, the whole graph is brought into the pane. |
+
+`graph` in `ui_state`, while the full graph shows: `nodes` and `edges` (how many dots and lines show), `kinds` (`{note, tag, attachment, unresolved}`, the dots of each kind), `filter`, `hovered` (the path of the note or file under the pointer, or the name of a tag or missing target; null with none), `zoom`, `labels` (how many labels the last paint drew), `settled` (whether the layout has come to rest), `options` (every option by its name) and `optionsOpen`. `localGraph`: `open` (whether the panel shows), `path` (the note it is about, or null), `depth`, and while it is open the same fields as `graph`; closed, `options` as saved. Null with the module off.
+
+The data is the core operation `vault.graph`: `{nodes: [{path, links, tags?}], edges: [{from, to}], unresolved: [{name, from}], attachments: [{path, from}]}`, with one edge per pair of notes and direction, `tags` left out for a note without any, and `from` as positions in `nodes`. The local graph is cut from the same answer in the window (`src/modules/graph/model.ts`). The options and the query are `options.ts`; `pnpm test:graph` checks both and the label placement. The colours and sizes are the `--graph-*` variables at the top of `src/app.css`.
+
+Measured on a vault of 3000 notes with 6400 links (a debug build, a 1200 by 800 window): the graph shows 0.1 s after `graph.open` and its first layout comes to rest after 5 s, at 55 to 60 frames a second, with `ui_state` and opening a note answering in under 50 ms meanwhile. A paint takes 1.5 ms zoomed out, 5 ms at zoom 0.5 with 260 labels, and 10 ms there with tags, attachments, unresolved targets and arrows on (10700 lines). Switching a filter costs 7 ms and then the layout moves for 4 s; a step of a force slider costs 2 ms. The local graph of a hub with 150 links shows at depth 1 at once, and at depth 3 it is most of the vault and behaves like the full graph.
+
+Known limits: every tick of the layout pushes every dot against every other (d3's approximation), 6 to 8 ms at 3000 notes, so around 6000 notes the layout drops under 30 frames a second while it moves; in a window that is covered or minimised the layout is worked out on a timer in slices of 100 ms, which the system slows down, so it can take half a minute to come to rest there (`settled` says when); a change of an option in the half second before another vault is opened is written to that vault; the name filter hides dots without moving the others together; two graphs of the same kind on screen (the full graph in two panes) share their options, and the commands act on the one opened last; the local graph's depth counts links through tags, attachments and unresolved targets when those show.
 
 ## Tables
 

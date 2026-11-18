@@ -30,7 +30,7 @@
     "test:editor": "node src/components/lineEndings.test.mjs",
     "test:excalidraw": "node src/modules/excalidraw/format.test.mjs",
     "test:health": "node src/modules/polled.test.mjs",
-    "test:graph": "node src/modules/graph/labels.test.mjs",
+    "test:graph": "node src/modules/graph/labels.test.mjs && node src/modules/graph/options.test.mjs && node src/modules/graph/model.test.mjs",
     "test:frontmatter": "node src/components/frontmatter.test.mjs",
     "test:history": "node src/modules/history/blame.test.mjs",
     "test:merge": "node src/modules/merge/merge3.test.mjs",

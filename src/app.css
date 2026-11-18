@@ -175,6 +175,22 @@
   /* The note under the pointer, and its lines. */
   --graph-hover: var(--accent);
   --graph-bg: var(--bg);
+  /* The dots that are not notes: a tag, a file that is not a note, a link target that reaches nothing. */
+  --graph-tag: var(--syntax-string);
+  --graph-attachment: var(--syntax-number);
+  --graph-unresolved: var(--text-faint);
+  /* The colours a group of notes can have, in the picker's order: red, orange, olive, green, cyan, blue, purple, pink.
+     Made of the code colours, which every theme sets for both appearances. */
+  --graph-group-1: var(--error);
+  --graph-group-2: var(--syntax-number);
+  --graph-group-3: color-mix(in oklab, var(--syntax-number), var(--syntax-string));
+  --graph-group-4: var(--syntax-string);
+  --graph-group-5: var(--syntax-type);
+  --graph-group-6: var(--syntax-function);
+  --graph-group-7: color-mix(in oklab, var(--syntax-function), var(--syntax-keyword));
+  --graph-group-8: var(--syntax-keyword);
+  /* The options panel over a graph. */
+  --graph-options-width: 264px;
 
   /* A comparison of two texts (components/DiffView.tsx): lines only in the newer text and lines only in the older one. */
   --diff-added-bg: color-mix(in srgb, var(--syntax-string) 16%, transparent);
@@ -2597,12 +2613,18 @@ kbd {
   background: var(--border);
 }
 
-/* Graph view: a canvas over the whole pane, with the filter field on top of it. */
+/* A graph: a canvas over the whole pane, with the options button and the options panel on top of it. */
 .graph {
   position: relative;
   flex: 1;
   min-height: 0;
   background: var(--graph-bg);
+}
+
+/* The local graph fills the right sidebar's body, over its padding. */
+.graph.is-local {
+  height: calc(100% + 18px);
+  margin: -2px -8px -16px;
 }
 
 .graph canvas {
@@ -2615,36 +2637,126 @@ kbd {
   font: var(--graph-label-size) var(--font-ui);
 }
 
-/* The filter field with its icon, floating in the graph's top left corner. */
-.graph-controls {
+.graph-empty {
+  position: absolute;
+  inset: 40% 16px auto;
+  margin: 0;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.graph-options-toggle {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.graph-options-toggle[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* The options: a box on the elevated surface under the button, which scrolls when the pane is short. */
+.graph-options {
   position: absolute;
   z-index: 1;
-  top: 12px;
-  left: 12px;
+  top: 44px;
+  right: 8px;
+  width: min(var(--graph-options-width), 100% - 16px);
+  max-height: calc(100% - 52px);
+  overflow-y: auto;
+  padding: 4px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  animation: pop-in 80ms ease-out;
+}
+
+.graph-options-header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: -6px;
+}
+
+.graph-options-title {
+  flex: 1;
+  font-weight: 600;
+}
+
+.graph-options h3 {
+  margin: 12px 0 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.graph-options section + section {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+/* One option: its name on the left, its switch or value on the right. A slider is on a row of its own under them. */
+.graph-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 8px;
+  min-height: 28px;
+}
+
+.graph-option output {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-option input[type="range"] {
+  flex: none;
+  width: 100%;
+  height: 16px;
+  margin: 0 0 6px;
+  accent-color: var(--accent);
+}
+
+.graph-option input[type="range"]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* The name filter, with its icon. */
+.graph-field {
   display: flex;
   align-items: center;
   gap: 6px;
-  width: 15rem;
-  padding: 0 9px;
+  margin: 4px 0;
+  padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text-muted);
 }
 
-.graph-controls:focus-within {
+.graph-field:focus-within,
+.graph-group-query:focus {
   border-color: var(--accent);
 }
 
-.graph-controls svg {
+.graph-field svg {
   flex: none;
 }
 
-.graph .graph-filter {
+.graph-field .graph-filter {
   flex: 1;
   min-width: 0;
   margin: 0;
-  padding: 6px 0;
+  padding: 5px 0;
   border: 0;
   outline: none;
   background: none;
@@ -2652,8 +2764,70 @@ kbd {
   font: inherit;
 }
 
-.graph .graph-filter::placeholder {
+.graph-field .graph-filter::placeholder,
+.graph-group-query::placeholder {
+  color: var(--text-faint);
+}
+
+/* A colour group: its colour, its query, and the button that removes it. The colours to pick from wrap under them. */
+.graph-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.graph-swatch {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
+  border-radius: 50%;
+}
+
+.graph-swatch[aria-checked="true"] {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.graph-group-query {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.graph-colours {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 0 4px 2px;
+}
+
+.graph-add-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  margin: 4px 0;
+  padding: 0 10px 0 8px;
+}
+
+.graph-hint {
+  margin: 4px 0 8px;
   color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.graph-hint code {
+  font: 0.95em var(--font-mono);
 }
 
 /*
@@ -2939,8 +3113,9 @@ kbd {
   user-select: text;
 }
 
-/* A checkbox drawn as a switch. */
-.settings input[type="checkbox"] {
+/* A checkbox drawn as a switch, in the settings and in the graph's options. */
+.settings input[type="checkbox"],
+.graph-options input[type="checkbox"] {
   appearance: none;
   position: relative;
   flex: none;
@@ -2953,7 +3128,8 @@ kbd {
   transition: background var(--transition);
 }
 
-.settings input[type="checkbox"]::after {
+.settings input[type="checkbox"]::after,
+.graph-options input[type="checkbox"]::after {
   content: "";
   position: absolute;
   top: 2px;
@@ -2966,15 +3142,18 @@ kbd {
   transition: transform var(--transition);
 }
 
-.settings input[type="checkbox"]:checked {
+.settings input[type="checkbox"]:checked,
+.graph-options input[type="checkbox"]:checked {
   background: var(--accent);
 }
 
-.settings input[type="checkbox"]:checked::after {
+.settings input[type="checkbox"]:checked::after,
+.graph-options input[type="checkbox"]:checked::after {
   transform: translateX(14px);
 }
 
-.settings input[type="checkbox"]:disabled {
+.settings input[type="checkbox"]:disabled,
+.graph-options input[type="checkbox"]:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -3187,8 +3366,7 @@ kbd {
 }
 
 /* Sidebar search */
-.search-input,
-.graph-filter {
+.search-input {
   width: 100%;
   margin-bottom: 8px;
   padding: 5px 8px;
@@ -3200,8 +3378,7 @@ kbd {
   font: inherit;
 }
 
-.search-input:focus,
-.graph-filter:focus {
+.search-input:focus {
   border-color: var(--accent);
 }
 
