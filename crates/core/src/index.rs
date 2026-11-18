@@ -16,6 +16,9 @@ pub struct Index {
     /// The other files (images and so on): lowercased path to path. Only a move
     /// looks at them, to keep the embeds of a file that moves working.
     files: HashMap<String, String>,
+    /// For each file name, lowercased and without `.md`: where its notes are in `notes`,
+    /// in that order. A link is resolved among the notes of its name instead of all notes.
+    names: HashMap<String, Vec<usize>>,
 }
 
 struct Note {
@@ -112,7 +115,15 @@ impl Index {
                 Some(Note { key: key(&path), path, content })
             })
             .collect();
-        Ok(Self { notes, files })
+        Ok(Self::new(notes, files))
+    }
+
+    fn new(notes: Vec<Note>, files: HashMap<String, String>) -> Self {
+        let mut names: HashMap<String, Vec<usize>> = HashMap::new();
+        for (at, note) in notes.iter().enumerate() {
+            names.entry(file_name(&note.key).to_string()).or_default().push(at);
+        }
+        Self { notes, files, names }
     }
 
     /// The note a link points to. `link` is the text inside the brackets and
@@ -139,8 +150,12 @@ impl Index {
             let file = path.rsplit('/').next().unwrap_or(path);
             file.strip_suffix(".md").unwrap_or(file).to_string()
         };
-        self.notes
+        // Every key that is the target or ends with `/target` has the target's file name,
+        // so the notes of that name are all the candidates there are.
+        let named = self.names.get(file_name(&target)).map_or(&[][..], Vec::as_slice);
+        named
             .iter()
+            .map(|at| &self.notes[*at])
             .filter(|n| n.key == target || n.key.ends_with(&suffix))
             .min_by_key(|n| {
                 (
@@ -222,7 +237,7 @@ impl Index {
             Note { key: key(&path), path, content: String::new() }
         });
         let files = self.files.values().map(|path| relocate(path, from, to)).map(|path| (path.to_lowercase(), path));
-        Index { notes: notes.collect(), files: files.collect() }
+        Index::new(notes.collect(), files.collect())
     }
 
     /// `content`, the text of the note that was at `note` before `from` (a
@@ -299,8 +314,6 @@ impl Index {
     /// The notes and the links between them, for the graph view. Every note is a
     /// node. A link that resolves to another note is an edge; links that repeat,
     /// point nowhere or point into their own note are left out.
-    // shortcut: resolves every link in the vault, each by a scan over all notes,
-    // fine for a few thousand notes; look targets up by file name in a map beyond that.
     pub fn graph(&self) -> Graph {
         let mut edges = BTreeSet::new();
         for note in &self.notes {
@@ -321,6 +334,44 @@ impl Index {
             .map(|n| Node { path: n.path.clone(), links: links_of.get(n.path.as_str()).copied().unwrap_or(0) })
             .collect();
         Graph { nodes, edges: edges.into_iter().collect() }
+    }
+
+    /// For each note, in the order of `paths`: the positions in that order of the other
+    /// notes its links and embeds reach, sorted and each once. What `graph` gives as
+    /// edges, as lists to walk.
+    pub fn adjacency(&self) -> Vec<Vec<usize>> {
+        let at: HashMap<&str, usize> = self.notes.iter().enumerate().map(|(at, note)| (note.path.as_str(), at)).collect();
+        let reached = |note: &Note| {
+            let mut to: Vec<usize> = links(&note.content)
+                .into_iter()
+                .map(|link| &note.content[link.inner])
+                // `[[#heading]]` stays in its note, and `resolve` would look through all notes for it.
+                .filter(|link| !normalize(link).is_empty())
+                .filter_map(|link| self.resolve(link, &note.path))
+                .map(|path| at[path])
+                .filter(|to| *to != at[note.path.as_str()])
+                .collect();
+            to.sort_unstable();
+            to.dedup();
+            to
+        };
+        self.notes.iter().map(reached).collect()
+    }
+
+    /// The targets of the links and embeds in the note at `path` that reach no note and
+    /// no file, as written (without `#heading` and `|alias`), in the order they first
+    /// appear. A target written again, in any case, is listed once.
+    pub fn unresolved(&self, path: &str) -> Vec<String> {
+        let content = self.content(path);
+        let mut lost: Vec<String> = Vec::new();
+        for link in links(content) {
+            let inner = &content[link.inner];
+            let name = target(inner).trim();
+            if self.file_of(inner, path).is_none() && !lost.iter().any(|seen| seen.to_lowercase() == name.to_lowercase()) {
+                lost.push(name.to_string());
+            }
+        }
+        lost
     }
 
     /// The links and embeds that reach no note and no file, grouped by the note they
@@ -365,6 +416,20 @@ impl Index {
     }
 }
 
+#[cfg(test)]
+impl Index {
+    /// An index of these files, for tests. A path that does not end in `.md` is a file that is not a note.
+    pub(crate) fn of(notes: &[(&str, &str)]) -> Index {
+        let (notes, files): (Vec<_>, Vec<_>) = notes.iter().partition(|(path, _)| path.ends_with(".md"));
+        let mut notes: Vec<Note> = notes
+            .iter()
+            .map(|(path, content)| Note { path: path.to_string(), key: key(path), content: content.to_string() })
+            .collect();
+        notes.sort_by(|a, b| a.path.cmp(&b.path));
+        Index::new(notes, files.iter().map(|(path, _)| (path.to_lowercase(), path.to_string())).collect())
+    }
+}
+
 /// The target part of a link: the text before `|alias` and `#heading`.
 /// Always a prefix of `link`. In a table the alias bar is written `\|`.
 fn target(link: &str) -> &str {
@@ -391,6 +456,11 @@ pub fn relocate(path: &str, from: &str, to: &str) -> String {
     }
 }
 
+/// The last part of a path or key.
+fn file_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
 fn folder(path: &str) -> &str {
     path.rsplit_once('/').map_or("", |(folder, _)| folder)
 }
@@ -400,7 +470,7 @@ fn hit(path: &str, line: usize, text: &str) -> Hit {
 }
 
 /// A line as the lists show it: without the space around it, 200 characters at most.
-fn clip(text: &str) -> String {
+pub(crate) fn clip(text: &str) -> String {
     text.trim().chars().take(200).collect()
 }
 
@@ -479,15 +549,8 @@ fn open_task(line: &str) -> Option<&str> {
 mod tests {
     use super::*;
 
-    /// An index of these files. A path that does not end in `.md` is a file that is not a note.
     fn index(notes: &[(&str, &str)]) -> Index {
-        let (notes, files): (Vec<_>, Vec<_>) = notes.iter().partition(|(path, _)| path.ends_with(".md"));
-        let mut notes: Vec<Note> = notes
-            .iter()
-            .map(|(path, content)| Note { path: path.to_string(), key: key(path), content: content.to_string() })
-            .collect();
-        notes.sort_by(|a, b| a.path.cmp(&b.path));
-        Index { notes, files: files.iter().map(|(path, _)| (path.to_lowercase(), path.to_string())).collect() }
+        Index::of(notes)
     }
 
     /// The notes whose text a move changes, with the new text, by the path they had before.

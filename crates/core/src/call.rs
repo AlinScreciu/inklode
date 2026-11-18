@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use crate::index::{Index, relocate};
 use crate::vault::{Write, hidden};
 use crate::watch::{Listener, Watcher, watch};
-use crate::{Error, Vault, claims, git, health, review};
+use crate::{Error, Vault, claims, git, graph, health, rank, review};
 
 /// The state behind the app: at most one open vault, its note index, and the
 /// watcher that reports changes made on disk.
@@ -173,6 +173,25 @@ struct QueryParam {
 }
 
 #[derive(Deserialize)]
+struct RankedParams {
+    query: String,
+    limit: Option<usize>,
+}
+
+#[derive(Deserialize)]
+struct GraphNoteParams {
+    path: String,
+    depth: Option<usize>,
+}
+
+/// `graph.path`.
+#[derive(Deserialize)]
+struct EndsParams {
+    from: String,
+    to: String,
+}
+
+#[derive(Deserialize)]
 struct ShowParams {
     path: String,
     rev: Option<String>,
@@ -288,8 +307,11 @@ impl Core {
     /// | `folder.new`     | `{path}`          | `null`. Makes an empty folder; fails if the path is taken |
     /// | `note.delete`    | `{path, own?}`    | `{trashed}`: where the file is now, under `.trash/` at the vault root; nothing is unlinked |
     /// | `search`         | `{query}`       | list of `{path, line, text}`, `line` 0 for a file-name match |
+    /// | `search.ranked`  | `{query, limit?}` | list of `{path, score, lines}`, best first, at most `limit` (10 if left out, 1 to 50): the notes that have a word of the query, as a whole word in any case, in their text or file name (rank.rs). The score is BM25 over the note's words, plus more for a query word in the file name, the frontmatter `aliases` or `tags`, or a heading. Notes with every word of the query come before the others whatever the scores. `lines` are the note's lines that say most of the query, at most 3, as `{line, text}` like `search` gives them, in note order |
     /// | `config.list`    | none              | `{themes, snippets}`: names of the `.css` files in `.inklode/themes` and `.inklode/snippets`, without extension |
     /// | `vault.graph`    | none              | `{nodes, edges}`: every note as `{path, links}` (`links` counts its edges), and an edge `{from, to}` for each note that links to another |
+    /// | `graph.note`     | `{path, depth?}`  | `{path, links, backlinks, unresolved}` (graph.rs): the paths of the notes it links to or embeds, of those that link to it, and the targets of its links that reach no note and no file, as written. `depth` is 1 (if left out), 2 or 3, else `BadParams`; above 1 there is also `near`, the notes 2 to `depth` links away in either direction as `{path, distance}`, nearest first, at most 200, and `nearTotal`, how many there are. `NotFound` when no note has the path |
+    /// | `graph.path`     | `{from, to}`      | `{found, path, steps}`: a shortest chain of notes from `from` to `to` where each is joined to the next by a link in either of the two. `path` is the notes in order, `steps` one `{from, to, linkIn}` per pair, `linkIn` being the note the link is written in. With no chain `found` is false and both lists are empty. `NotFound` when one of the two is not a note |
     /// | `vault.health`   | none              | `{broken, orphans, stale, unchecked}` (health.rs). `broken`: the notes with links or embeds that reach no note and no file, by path, each `{path, links}` with `links` as `{line, link, text}` (`link` is the text between the brackets). `orphans`: the paths of the notes with no link to another note and none from one. `stale`: `{path, updated, repo, dir, commits, newest}` for each note and entry of its frontmatter `repos:` whose repository has commits on its default branch dated after the note's `updated:` day (an entry `name:dir` counts the commits under `dir`, `name:!dir` those outside it; commits of housekeeping files alone do not count); `repo` is the entry as written, `dir` the repository's root, `commits` how many there are and `newest` the last of them as `{date, rev, subject}` with the short hash. `unchecked`: `{path, repo, reason}` for a `repos:` entry that is not the root of a git repository, and with `repo` null for a note with `repos:` and no valid `updated:`. Runs `git log` in those repositories and writes nothing; the commits read are kept while a repository's default branch stays at the same commit, so a report on repositories that did not change asks each only where that branch is. A host that shares the core runs it as `Core::health_check` and `HealthCheck::run`, to let go of the core while git runs |
     /// | `vault.tasks`    | none              | list of `{path, tasks}`, by path: the notes with open checkboxes (`- [ ]`, also after `*`, `+`, `1.` and `1)`) outside fenced code blocks, `tasks` as `{line, text}` with `line` from 1 |
     /// | `git.log`        | `{path}`          | list of `{rev, author, date, subject}`: the commits that changed the file, newest first, through renames. `rev` is the full hash, `date` the author date as ISO 8601 |
@@ -364,6 +386,25 @@ impl Core {
                 let p: QueryParam = parse(name, params)?;
                 let (_, index) = self.fresh()?;
                 Ok(json!(index.search(&p.query)))
+            }
+            "search.ranked" => {
+                let p: RankedParams = parse(name, params)?;
+                let (_, index) = self.fresh()?;
+                Ok(json!(rank::search(index, &p.query, p.limit.unwrap_or(10).clamp(1, 50))))
+            }
+            "graph.note" => {
+                let p: GraphNoteParams = parse(name, params)?;
+                let depth = p.depth.unwrap_or(1);
+                if !(1..=3).contains(&depth) {
+                    return Err(Error::BadParams(name.to_string(), "depth is 1, 2 or 3".to_string()));
+                }
+                let (_, index) = self.fresh()?;
+                Ok(json!(graph::note(index, note_path(&p.path)?, depth)?))
+            }
+            "graph.path" => {
+                let p: EndsParams = parse(name, params)?;
+                let (_, index) = self.fresh()?;
+                Ok(json!(graph::path(index, note_path(&p.from)?, note_path(&p.to)?)?))
             }
             "vault.graph" => {
                 let (_, index) = self.fresh()?;
@@ -632,6 +673,34 @@ mod tests {
 
         // A note written through the core is found by the next query.
         core.call("note.write", json!({ "path": "b.md", "content": "x\nsee [[Home]]\n" })).unwrap();
+        let ranked = core.call("search.ranked", json!({ "query": "home hidden", "limit": 2 })).unwrap();
+        assert_eq!(ranked.as_array().unwrap().len(), 2);
+        assert_eq!((&ranked[0]["path"], &ranked[0]["lines"]), (&json!("Home.md"), &json!([{ "line": 1, "text": "# Home" }])));
+        assert!(ranked[0]["score"].as_f64().unwrap() > ranked[1]["score"].as_f64().unwrap());
+        // No limit can ask for nothing or for everything.
+        assert_eq!(core.call("search.ranked", json!({ "query": "home", "limit": 0 })).unwrap().as_array().unwrap().len(), 1);
+        assert!(matches!(core.call("search.ranked", json!({ "query": "home", "limit": "2" })), Err(Error::BadParams(..))));
+
+        let around = core.call("graph.note", json!({ "path": "Home.md" })).unwrap();
+        assert_eq!(around, json!({ "path": "Home.md", "links": [], "backlinks": ["a.md", "b.md"], "unresolved": [] }));
+        let around = core.call("graph.note", json!({ "path": "a.md", "depth": 2 })).unwrap();
+        assert_eq!(around, json!({ "path": "a.md", "links": ["Home.md"], "backlinks": [], "unresolved": [], "near": [{ "path": "b.md", "distance": 2 }], "nearTotal": 1 }));
+        for depth in [0, 4] {
+            assert!(matches!(core.call("graph.note", json!({ "path": "a.md", "depth": depth })), Err(Error::BadParams(..))));
+        }
+        let route = core.call("graph.path", json!({ "from": "a.md", "to": "b.md" })).unwrap();
+        assert_eq!(
+            route,
+            json!({
+                "found": true,
+                "path": ["a.md", "Home.md", "b.md"],
+                "steps": [{ "from": "a.md", "to": "Home.md", "linkIn": "a.md" }, { "from": "Home.md", "to": "b.md", "linkIn": "b.md" }],
+            })
+        );
+        // The hidden note is not in the graph, and a dot path is refused like any note path.
+        assert!(matches!(core.call("graph.note", json!({ "path": ".obsidian/x.md" })), Err(Error::BadPath(_))));
+        assert!(matches!(core.call("graph.path", json!({ "from": "a.md", "to": ".obsidian/x.md" })), Err(Error::BadPath(_))));
+        assert!(matches!(core.call("graph.note", json!({ "path": "pic.png" })), Err(Error::NotFound(_))));
         let found = core.call("search", json!({ "query": "HOME" })).unwrap();
         assert_eq!(
             found,

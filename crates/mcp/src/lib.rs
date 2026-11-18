@@ -13,10 +13,13 @@ struct ToolDef {
     /// The `Core::call` name it maps to. The tool's arguments are passed on unchanged, except `own` (see `call`).
     call: &'static str,
     description: &'static str,
-    /// `(name, description)` of each parameter. All are strings, and required
-    /// unless the description starts with `Optional`.
+    /// `(name, description)` of each parameter. All are strings, except those named in
+    /// `INTEGERS`, and required unless the description starts with `Optional`.
     params: &'static [(&'static str, &'static str)],
 }
+
+/// The parameters that are whole numbers, in whichever tool has one of that name.
+const INTEGERS: &[&str] = &["limit", "depth"];
 
 const NOTE_PATH: &str = "Path of the note, relative to the vault root, with forward slashes, e.g. `Projects/Plan.md`. Paths with a part that starts with a dot (`.git`, `.inklode`, `.trash`) are refused.";
 
@@ -25,8 +28,17 @@ const TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "search",
         call: "search",
-        description: "Finds notes whose file name or text contains the query, ignoring case; returns at most 200 hits as {path, line, text}, where line 0 is a file-name match.",
-        params: &[("query", "Text to look for.")],
+        description: "Finds every place an exact text is written: the notes whose file name or text contains the query as typed (any case, spaces included, part of a word too). Returns hits in file order, not by relevance, at most 200, as {path, line, text}, where line 0 is a file-name match. Use it for an exact phrase, an identifier, a URL, or to list all occurrences. To find which notes are about a topic, use `search_ranked`.",
+        params: &[("query", "The exact text to look for.")],
+    },
+    ToolDef {
+        name: "search_ranked",
+        call: "search.ranked",
+        description: "Finds the notes that are most about a topic, best first. Start here when you do not know which note holds something. The query is taken as separate words; a note matches when it has at least one of them as a whole word (any case, no stemming: `backup` does not match `backups`). Notes are ranked by how much they say about the words (BM25), with more weight for a word in the note's file name, its frontmatter `aliases` or `tags`, or a heading, and notes that have every word come first. Returns [{path, score, lines}]: `score` is higher for a better match and only comparable within one answer; `lines` are up to 3 of the note's best matching lines as {line, text}, with line numbers from 1. Then `read` the note. For an exact phrase or every occurrence, use `search`.",
+        params: &[
+            ("query", "A few words that say what the note is about, e.g. `release signing notarization`."),
+            ("limit", "Optional. How many notes to return, 1 to 50. 10 if left out."),
+        ],
     },
     ToolDef {
         name: "read",
@@ -108,6 +120,21 @@ const TOOLS: &[ToolDef] = &[
         ],
     },
     ToolDef {
+        name: "graph_note",
+        call: "graph.note",
+        description: "Shows where a note sits among the links between notes (`[[wiki links]]` and `![[embeds]]`). Returns {path, links, backlinks, unresolved}: `links` are the paths of the notes it links to, `backlinks` the paths of the notes that link to it, `unresolved` the link targets in it that name no note and no file (broken links, or notes not written yet). With `depth` 2 or 3 it also returns `near`, the notes 2 to `depth` links away, following links in either direction, as {path, distance}, nearest first and at most 200, and `nearTotal`, how many there are. Use it to find related notes, and before you rename, move or delete a note. For the linking lines themselves, use `backlinks`.",
+        params: &[("path", NOTE_PATH), ("depth", "Optional. How many links away to look: 1, 2 or 3. 1 if left out.")],
+    },
+    ToolDef {
+        name: "graph_path",
+        call: "graph.path",
+        description: "Finds how two notes are connected: a shortest chain of notes from one to the other in which each note is joined to the next by a link, in either direction. Returns {found, path, steps}: `path` is the chain as note paths, from `from` to `to`; `steps` has one {from, to, linkIn} per pair of neighbours, where `linkIn` is the note the link is written in (`from` or `to`). When nothing connects the two, `found` is false and `path` and `steps` are empty. Fails with `not found` when one of the two is not a note.",
+        params: &[
+            ("from", "Path of the note to start from, relative to the vault root, with forward slashes."),
+            ("to", "Path of the note to reach, relative to the vault root, with forward slashes."),
+        ],
+    },
+    ToolDef {
         name: "git_log",
         call: "git.log",
         description: "Lists the git commits that changed a note, newest first and through renames, as {rev, author, date, subject}. Empty when the vault is not in a git repository or the note was never committed.",
@@ -157,7 +184,10 @@ impl ToolDef {
         let properties: serde_json::Map<String, Value> = self
             .params
             .iter()
-            .map(|(name, description)| (name.to_string(), json!({ "type": "string", "description": description })))
+            .map(|(name, description)| {
+                let kind = if INTEGERS.contains(name) { "integer" } else { "string" };
+                (name.to_string(), json!({ "type": kind, "description": description }))
+            })
             .collect();
         let required: Vec<&str> = self.params.iter().filter(|(_, description)| !description.starts_with("Optional")).map(|(name, _)| *name).collect();
         let schema = json!({ "type": "object", "properties": properties, "required": required });

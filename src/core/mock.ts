@@ -185,6 +185,84 @@ function search(query: string): Hit[] {
   return hits.slice(0, 200);
 }
 
+/** The words of a text: its runs of letters and digits, in lowercase. */
+const words = (text: string): string[] => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+
+// shortcut: the mock scores a note by how many times it has the query's words, with a fixed bonus for one in the
+// file name; the real core ranks with BM25 and also weighs aliases, tags and headings (crates/core/src/rank.rs).
+function searchRanked(query: string, limit: number) {
+  const terms = [...new Set(words(query))];
+  const found = [];
+  for (const path of notePaths()) {
+    const lines = files.get(path)!.split("\n");
+    const name = words(path.split("/").pop()!.replace(/\.md$/, ""));
+    const count = (term: string) => words(lines.join("\n")).filter((w) => w === term).length + (name.includes(term) ? 5 : 0);
+    const counts = terms.map(count);
+    if (!counts.some(Boolean)) continue;
+    const matching = lines.map((text, i) => ({ line: i + 1, text: text.trim().slice(0, 200) })).filter((l) => words(l.text).some((w) => terms.includes(w)));
+    found.push({ all: counts.every(Boolean), path, score: counts.reduce((a, b) => a + b, 0), lines: matching.slice(0, 3) });
+  }
+  found.sort((a, b) => Number(b.all) - Number(a.all) || b.score - a.score || (a.path < b.path ? -1 : 1));
+  return found.slice(0, limit).map(({ path, score, lines }) => ({ path, score, lines }));
+}
+
+/** The notes, sorted, as the real index has them: no dot files. */
+const notePaths = () => [...files.keys()].filter((p) => p.endsWith(".md") && !p.startsWith(".")).sort();
+
+/** For each note, the other notes its links reach. */
+function linked(): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const from of notePaths()) {
+    const to = [...files.get(from)!.matchAll(LINK)].map((m) => resolve(m[1], from));
+    out.set(from, new Set(to.filter((p): p is string => p !== null && p !== from && p.endsWith(".md"))));
+  }
+  return out;
+}
+
+/** From `start`, each note that links lead to in either direction, with the note before it on a shortest way there. */
+function reach(out: Map<string, Set<string>>, start: string): Map<string, { distance: number; before: string }> {
+  if (!out.has(start)) throw new Error(`not found: ${start}`);
+  const seen = new Map([[start, { distance: 0, before: start }]]);
+  const queue = [start];
+  for (const at of queue) {
+    const beside = [...out.get(at)!, ...[...out.keys()].filter((p) => out.get(p)!.has(at))];
+    for (const next of beside) {
+      if (seen.has(next)) continue;
+      seen.set(next, { distance: seen.get(at)!.distance + 1, before: at });
+      queue.push(next);
+    }
+  }
+  return seen;
+}
+
+function graphNote(path: string, depth: number) {
+  if (![1, 2, 3].includes(depth)) throw new Error("bad params for graph.note: depth is 1, 2 or 3");
+  const out = linked();
+  const seen = reach(out, notePath(path));
+  const targets = [...files.get(path)!.matchAll(LINK)].filter((m) => resolve(m[1], path) === null && !assets.has(target(m[1])));
+  const graph = {
+    path,
+    links: [...out.get(path)!].sort(),
+    backlinks: [...out.keys()].filter((p) => out.get(p)!.has(path)),
+    unresolved: [...new Set(targets.map((m) => target(m[1])))],
+  };
+  if (depth === 1) return graph;
+  const near = [...seen].map(([p, { distance }]) => ({ path: p, distance })).filter((n) => n.distance > 1 && n.distance <= depth);
+  near.sort((a, b) => a.distance - b.distance || (a.path < b.path ? -1 : 1));
+  return { ...graph, near: near.slice(0, 200), nearTotal: near.length };
+}
+
+function graphPath(from: string, to: string) {
+  const out = linked();
+  const seen = reach(out, notePath(from));
+  if (!out.has(notePath(to))) throw new Error(`not found: ${to}`);
+  if (!seen.has(to)) return { found: false, path: [], steps: [] };
+  const path = [to];
+  while (path[0] !== from) path.unshift(seen.get(path[0])!.before);
+  const steps = path.slice(1).map((next, i) => ({ from: path[i], to: next, linkIn: out.get(path[i])!.has(next) ? path[i] : next }));
+  return { found: true, path, steps };
+}
+
 function rename(from: string, to: string): { updated: string[] } {
   if (!files.has(from)) throw new Error(`${from}: not found`);
   if (files.has(to)) throw new Error(`${to}: already exists`);
@@ -310,6 +388,12 @@ export function mockCall(name: string, params: Record<string, unknown>): unknown
       return backlinks(path);
     case "search":
       return search(params.query as string);
+    case "search.ranked":
+      return searchRanked(params.query as string, Math.min(Math.max((params.limit as number | undefined) ?? 10, 1), 50));
+    case "graph.note":
+      return graphNote(path, (params.depth as number | undefined) ?? 1);
+    case "graph.path":
+      return graphPath(params.from as string, params.to as string);
     case "note.rename":
       return rename(params.from as string, params.to as string);
     case "note.delete": {

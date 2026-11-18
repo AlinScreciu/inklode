@@ -78,15 +78,19 @@ fn serves_a_vault_over_stdio() {
     let names: Vec<&str> = tools.iter().map(|tool| tool["name"].as_str().unwrap()).collect();
     assert_eq!(
         names,
-        ["search", "read", "write", "create", "rename", "delete", "folder_rename", "folder_delete", "folder_new", "list", "backlinks", "resolve", "git_log", "git_show", "git_blame", "review_list", "health", "tasks", "claims_list"]
+        ["search", "search_ranked", "read", "write", "create", "rename", "delete", "folder_rename", "folder_delete", "folder_new", "list", "backlinks", "resolve", "graph_note", "graph_path", "git_log", "git_show", "git_blame", "review_list", "health", "tasks", "claims_list"]
     );
-    let write = &tools[2];
+    let write = &tools[3];
     assert!(!write["description"].as_str().unwrap().is_empty());
     // `base` is offered and optional.
     assert_eq!(write["inputSchema"]["required"], json!(["path", "content"]));
     assert!(write["inputSchema"]["properties"]["base"]["description"].is_string());
     assert!(write["inputSchema"]["properties"]["path"]["description"].is_string());
-    assert_eq!(tools[3]["inputSchema"]["required"], json!(["path"]));
+    assert_eq!(tools[4]["inputSchema"]["required"], json!(["path"]));
+    // A number is asked for as a number, and the ones with a default are optional.
+    assert_eq!(tools[1]["inputSchema"]["required"], json!(["query"]));
+    assert_eq!(tools[1]["inputSchema"]["properties"]["limit"]["type"], "integer");
+    assert_eq!(tools[1]["inputSchema"]["properties"]["query"]["type"], "string");
 
     let (is_error, text) = client.tool("write", json!({ "path": "sub/a.md", "content": "a zebra\n" }));
     assert_eq!((is_error, text.as_str()), (false, "null"));
@@ -139,6 +143,43 @@ fn serves_a_vault_over_stdio() {
         serde_json::from_str::<Value>(&text).unwrap(),
         json!([{ "path": "sub/a.md", "line": 1, "text": "a zebra" }])
     );
+
+    // The ranked search and the graph tools, on three notes in a row: a links to hub, hub to c.
+    client.tool("write", json!({ "path": "graph/hub.md", "content": "# Hub\nA zebra crossing. [[c]] [[later]]\n" }));
+    client.tool("write", json!({ "path": "graph/c.md", "content": "end\n" }));
+    client.tool("write", json!({ "path": "sub/a.md", "content": "a zebra\nsee [[hub]]\n" }));
+    let (is_error, text) = client.tool("search_ranked", json!({ "query": "zebra hub", "limit": 1 }));
+    assert!(!is_error, "{text}");
+    let ranked: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(ranked.as_array().unwrap().len(), 1);
+    assert_eq!((&ranked[0]["path"], &ranked[0]["lines"]), (&json!("graph/hub.md"), &json!([{ "line": 1, "text": "# Hub" }, { "line": 2, "text": "A zebra crossing. [[c]] [[later]]" }])));
+    let (is_error, text) = client.tool("graph_note", json!({ "path": "sub/a.md", "depth": 2 }));
+    assert!(!is_error, "{text}");
+    assert_eq!(
+        serde_json::from_str::<Value>(&text).unwrap(),
+        json!({ "path": "sub/a.md", "links": ["graph/hub.md"], "backlinks": [], "unresolved": [], "near": [{ "path": "graph/c.md", "distance": 2 }], "nearTotal": 1 })
+    );
+    let (_, text) = client.tool("graph_note", json!({ "path": "graph/hub.md" }));
+    assert_eq!(serde_json::from_str::<Value>(&text).unwrap(), json!({ "path": "graph/hub.md", "links": ["graph/c.md"], "backlinks": ["sub/a.md"], "unresolved": ["later"] }));
+    let (is_error, text) = client.tool("graph_path", json!({ "from": "graph/c.md", "to": "sub/a.md" }));
+    assert!(!is_error, "{text}");
+    assert_eq!(
+        serde_json::from_str::<Value>(&text).unwrap(),
+        json!({
+            "found": true,
+            "path": ["graph/c.md", "graph/hub.md", "sub/a.md"],
+            "steps": [{ "from": "graph/c.md", "to": "graph/hub.md", "linkIn": "graph/hub.md" }, { "from": "graph/hub.md", "to": "sub/a.md", "linkIn": "sub/a.md" }],
+        })
+    );
+    let (_, text) = client.tool("graph_path", json!({ "from": "graph/c.md", "to": "made/b.md" }));
+    assert_eq!(text, r#"{"found":false,"path":[],"steps":[]}"#);
+    let (is_error, text) = client.tool("graph_note", json!({ "path": "graph/hub.md", "depth": 9 }));
+    assert_eq!((is_error, text.as_str()), (true, "bad params for graph.note: depth is 1, 2 or 3"));
+    let (is_error, text) = client.tool("graph_note", json!({ "path": ".git/config" }));
+    assert!(is_error && text.starts_with("path is outside the vault or has a part that starts with a dot"), "{text}");
+    client.tool("write", json!({ "path": "sub/a.md", "content": "a zebra\n" }));
+    client.tool("delete", json!({ "path": "graph/hub.md" }));
+    client.tool("delete", json!({ "path": "graph/c.md" }));
 
     let (is_error, text) = client.tool("list", json!({}));
     assert!(!is_error);

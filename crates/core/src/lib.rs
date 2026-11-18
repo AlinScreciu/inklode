@@ -6,8 +6,10 @@
 mod call;
 mod claims;
 mod git;
+mod graph;
 mod health;
 mod index;
+mod rank;
 mod review;
 mod vault;
 mod watch;
