@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import { forceLink, forceManyBody, forceSimulation, forceX, forceY, type SimulationNodeDatum } from "d3-force";
 import type { ViewProps } from "../../modules";
 import { call, open } from "./index";
+import { placeLabels, type LabelBox } from "./labels";
 
 /** What `vault.graph` returns (crates/core/src/call.rs). */
 interface Data {
@@ -42,8 +43,6 @@ const DRAG_START = 4;
  * Draws the note graph on `canvas` and handles the pointer. `marked` is the path of the note to mark,
  * `onOpen` is called with the path of a clicked note. Returns what the React component needs.
  */
-// shortcut: labels are drawn without checking that they overlap, so a dense zoomed-in area is hard to read;
-// skip a label whose box is taken when that shows up.
 function createGraph(canvas: HTMLCanvasElement, marked: string, onOpen: (path: string) => void) {
   const ctx = canvas.getContext("2d")!;
   let nodes: Node[] = [];
@@ -76,6 +75,7 @@ function createGraph(canvas: HTMLCanvasElement, marked: string, onOpen: (path: s
       // `.graph canvas` sets these two from `--graph-label` and `--graph-label-size`, which gives the size in px.
       label: style.color,
       font: `${style.fontSize} ${style.fontFamily}`,
+      fontSize: parseFloat(style.fontSize),
       size: parseFloat(variable("--graph-node-size")) || 4,
     };
   };
@@ -197,15 +197,26 @@ function createGraph(canvas: HTMLCanvasElement, marked: string, onOpen: (path: s
     ctx.strokeStyle = look.halo;
     ctx.lineWidth = 3;
     ctx.lineJoin = "round";
+    // A label is left out when it would cover one that matters more: the pointed-at note first, then the
+    // marked one, then the pointed-at note's neighbours, then the notes with the most links.
+    const labelled: Node[] = [];
+    const boxes: LabelBox[] = [];
     for (const node of shown) {
       const r = radius(node) * view.k;
       const near = hovered !== null && lit(node);
       if (r < LABEL_MIN_RADIUS && !near && node !== mark) continue;
-      const [x, y] = [node.x! * view.k + view.x, node.y! * view.k + view.y];
+      const [x, y] = [node.x! * view.k + view.x, node.y! * view.k + view.y + r + 5];
       if (x < -100 || x > width + 100 || y < -20 || y > height) continue;
+      const textWidth = ctx.measureText(node.name).width;
+      const rank = node.links + (node === hovered ? 3e9 : node === mark ? 2e9 : near ? 1e9 : 0);
+      labelled.push(node);
+      boxes.push({ left: x - textWidth / 2, top: y, width: textWidth, height: look.fontSize, rank });
+    }
+    for (const index of placeLabels(boxes)) {
+      const [node, box] = [labelled[index], boxes[index]];
       ctx.globalAlpha = lit(node) ? 1 : DIM;
-      ctx.strokeText(node.name, x, y + r + 5);
-      ctx.fillText(node.name, x, y + r + 5);
+      ctx.strokeText(node.name, box.left + box.width / 2, box.top);
+      ctx.fillText(node.name, box.left + box.width / 2, box.top);
     }
     ctx.globalAlpha = 1;
   }
