@@ -2,7 +2,14 @@
 
 ## 0.1.4
 
-No change to the app. From this version on, the signature the updater checks is made on the maintainer's Mac and no longer in CI, so GitHub alone cannot ship an update.
+Fixes, found on a vault of 360 notes:
+
+- Two settings saved at the same moment no longer end in "settings.json: No such file or directory" with one of them lost.
+- The vault health report no longer keeps notes from opening and saving while it runs, and asks git once per repository instead of once per note.
+- The stale check of vault health is stricter about what it counts: a `repos:` name must be a repository's root folder, not a folder inside another repository; only commits on the default branch count; `repo:dir` and `repo:!dir` limit the check to a folder or to everything outside it; commits that only touch `.gitignore`, `.gitattributes`, `.editorconfig`, `.github/CODEOWNERS` or `.pre-commit-config.yaml` do not count.
+- In the graph, labels no longer cover each other.
+
+Releases: the signature the updater checks is now made on the maintainer's Mac and no longer in CI, so GitHub alone cannot ship an update.
 
 ## 0.1.3
 
