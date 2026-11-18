@@ -1,0 +1,5 @@
+# Fixed versions of packages inside @excalidraw/excalidraw 0.18.1 (its latest release) that have security
+# advisories. Same major version as the one it asks for. Remove an entry when Excalidraw asks for a fixed one.
+overrides:
+  nanoid@3: ^3.3.18
+  lodash-es@4: ^4.18.0

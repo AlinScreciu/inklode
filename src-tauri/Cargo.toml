@@ -33,7 +33,7 @@ tauri-plugin-global-shortcut = "2"
 # The Copy buttons of the MCP settings write the token to the clipboard from Rust, so it never enters the window.
 tauri-plugin-clipboard-manager = "2"
 # The MCP token.
-getrandom = "0.3"
+getrandom = "0.4"
 # The body of the 401 answer of the MCP server.
 http-body-util = "0.1"
 bytes = "1"
