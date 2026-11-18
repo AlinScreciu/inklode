@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+No change to the app. From this version on, the signature the updater checks is made on the maintainer's Mac and no longer in CI, so GitHub alone cannot ship an update.
+
 ## 0.1.3
 
 No new features. Updated dependencies:
