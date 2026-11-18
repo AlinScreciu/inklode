@@ -16,18 +16,18 @@ jobs:
     # macOS is the only platform the app is tested on.
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # rustup is on the runner image; the crates need edition 2024 (Rust 1.85 or newer).
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           version: 10
 
       # Node 24 strips types on import, which the test:* scripts rely on.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: pnpm
