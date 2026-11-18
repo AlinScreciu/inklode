@@ -42,6 +42,12 @@ fn core_call(
         let check = state.lock().map_err(|e| e.to_string())?.health_check().map_err(|e| e.to_string())?;
         return Ok(serde_json::json!(check.run()));
     }
+    if inklode_core::Outside::has(&name) {
+        // And so are the `git.*` and `review.*` operations: they run git and compare every note with a
+        // commit, after each save and each change on disk, and use nothing of the core but the vault's folder.
+        let outside = state.lock().map_err(|e| e.to_string())?.outside().map_err(|e| e.to_string())?;
+        return outside.run(&name, params).map_err(|e| e.to_string());
+    }
     let mut core = state.lock().map_err(|e| e.to_string())?;
     let result = core.call(&name, params).map_err(|e| e.to_string())?;
     // The window may load files (images in notes) from the open vault, and from nowhere else.

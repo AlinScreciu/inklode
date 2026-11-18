@@ -77,7 +77,7 @@ The `history` module, off by default: `"modules": {"history": true}` in `.inklod
 
 `gitHistory` in `ui_state`: `open`, `path` (the note the panel is about), `revisions` (`[{rev, author, date, subject}]`), `selected` (a hash or null), `diff` (`{added, removed}` line counts against the picked version, or null), `diffIn` (`sidebar` or `pane`, where the comparison shows), `blame` (whether the margin is on) and `blameRanges` (`[{from, to, rev, author, date}]` for the active editor, lines from 1, `rev` null for lines not committed yet; null while the margin is off).
 
-The core operations are `git.log {path}`, `git.show {path, rev?}` and `git.blame {path}` (the table on `Core::call`). `src/components/DiffView.tsx` is the comparison view, built on `lineDiff` in `src/textDiff.ts`, and is not part of the module, so other features can show a comparison with it; `src/components/DiffPane.tsx` is the same comparison with a pane to itself, under a header with the line counts and buttons. Its colours are the `--diff-*` variables and the margin's the `--blame-*` variables at the top of `src/app.css`.
+The core operations are `git.log {path}`, `git.show {path, rev?}` and `git.blame {path}` (the table on `Core::call`). They do not hold up the rest of the app: the app and the MCP servers run them without holding the core (`Core::outside`), so notes open and save while git runs. `src/components/DiffView.tsx` is the comparison view, built on `lineDiff` in `src/textDiff.ts`, and is not part of the module, so other features can show a comparison with it; `src/components/DiffPane.tsx` is the same comparison with a pane to itself, under a header with the line counts and buttons. Its colours are the `--diff-*` variables and the margin's the `--blame-*` variables at the top of `src/app.css`.
 
 ## Merging changes made outside
 
@@ -113,7 +113,7 @@ The `review` module, off by default: `"modules": {"review": true}` in `.inklode/
 
 `review` in `ui_state`: `open` (whether the inbox shows), `repository` (false in a vault that is not in a git repository), `entries` (`[{path, status, added, removed, commits, uncommitted}]`, `commits` as `[{rev, author, date, subject}]` newest first), `selected` (a path or null) and `diff` (`{added, removed}` for the picked note, as the comparison marks the lines, or null).
 
-The core operations are `review.list`, `review.base {path}`, `review.accept {path?}` and `review.saved {path, before, after}` (the table on `Core::call`; `crates/core/src/review.rs`). The MCP tool `review_list` is the first of them. The list's width and the badge's colours are `--review-list-width`, `--badge-bg` and `--badge-text` at the top of `src/app.css`.
+The core operations are `review.list`, `review.base {path}`, `review.accept {path?}` and `review.saved {path, before, after}` (the table on `Core::call`; `crates/core/src/review.rs`). Like the history's they run without holding the core, so reading the inbox, which compares every note with a commit, does not make a note wait to open or save. Two of them at once in one program change the state file one after the other; the app and `inklode-mcp` changing the state of one vault in the same moment can still lose one of the two changes. The MCP tool `review_list` is the first of them. The list's width and the badge's colours are `--review-list-width`, `--badge-bg` and `--badge-text` at the top of `src/app.css`.
 
 Known limits: a note that waits and is renamed or moved in Inklode shows as two entries, a deleted and an added one; the accepted texts are all in the one state file, which is read and written whole; a commit made outside shows its author only at the next change in the vault or when the window comes to the front; merge commits are not named as the origin of a change.
 
@@ -128,10 +128,16 @@ The `health` module, off by default: `"modules": {"health": true}` in `.inklode/
   - An entry can end in a scope. `name:dir` counts only the commits that change something under `dir`, a path from the repository's root; `name:!dir` only those that change something outside it.
   - A commit that changes only housekeeping files at the repository's root does not count: `.gitignore`, `.gitattributes`, `.editorconfig`, `.github/CODEOWNERS`, `.pre-commit-config.yaml`.
   - A row that starts with "?" is a note that could not be checked: its repository was not found or the folder is not the root of a git repository, or the note has `repos:` and no valid `updated:`.
-  - Git is only read (`rev-parse`, `log`), never written, and nothing is fetched.
+  - Git is only read (`rev-parse`, `show-ref`, `log`), never written, and nothing is fetched.
 - Notes without links: no link to another note and none from one.
 
-The ribbon button carries the number of broken links plus stale notes. The list is read again when files of the vault change and when the window comes to the front (a commit in a repository changes no file of the vault). One reading runs at a time and at most one more waits, and the git part of a reading does not hold up the rest of the app: notes open and save while it runs.
+The ribbon button carries the number of broken links plus stale notes. The list is read again:
+
+- three seconds after the files of the vault last changed, so a row of saves is one reading, and the panel and the count are that much behind a change;
+- when the panel is opened;
+- when the window comes to the front while the panel shows. A commit in a repository changes no file of the vault, so with the panel closed the count learns of it at the next change in the vault.
+
+For the three seconds after another vault is opened, the panel and the count are still those of the vault before. One reading runs at a time and at most one more waits, and the git part of a reading does not hold up the rest of the app: notes open and save while it runs. The commits read from a repository are kept until its default branch is at another commit, so a reading costs two short git runs per repository (its root, and where that branch is) plus a `git log` for each one that changed; the kept commits are gone when the app is closed.
 
 `health` in `ui_state`: `open` (whether the panel shows), `broken` (`[{path, links: [{line, link, text}]}]`), `orphans` (paths), `stale` (`[{path, updated, repo, dir, commits, newest: {date, rev, subject}}]`) and `unchecked` (`[{path, repo, reason}]`, `repo` null when `updated:` is the problem). That is what the core operation `vault.health` returns (the table on `Core::call`; `crates/core/src/health.rs`), which is also the MCP tool `health`.
 

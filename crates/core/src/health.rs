@@ -17,11 +17,15 @@
 //!   something outside it.
 //! - A commit that changes nothing but the files in `HOUSEKEEPING` does not count.
 //!
-//! Git is only read (`rev-parse` and `log`), and nothing is fetched: a commit that was
+//! Git is only read (`rev-parse`, `show-ref` and `log`), and nothing is fetched: a commit that was
 //! not fetched yet is not seen.
+//!
+//! The commits read from a repository are kept (`Logs`) for as long as its default branch
+//! stays at the same commit, so a report on repositories that did not change runs no `git log`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::Serialize;
 
@@ -81,6 +85,26 @@ pub fn roots() -> Vec<PathBuf> {
     roots.split(':').filter(|root| !root.is_empty()).map(expand).collect()
 }
 
+/// The commits read so far, by repository and scope, shared by the reports of one core.
+pub(crate) type Cache = Arc<Mutex<Logs>>;
+
+#[derive(Default)]
+pub(crate) struct Logs {
+    kept: HashMap<(PathBuf, Scope), Kept>,
+    /// How many times `git log` ran, for the tests.
+    #[cfg(test)]
+    read: usize,
+}
+
+/// What `git log` gave for one repository and scope.
+struct Kept {
+    /// The commit the default branch was at. Another commit there makes this old.
+    rev: String,
+    /// The day the commits were read from. A report that asks from an earlier day reads again.
+    since: String,
+    log: Vec<Newest>,
+}
+
 /// What one `vault.health` needs of the index, taken out of it by [`check`], so that a host
 /// can run the git part without holding the core: it takes seconds in a vault whose notes
 /// name many repositories, and the window reads and saves notes meanwhile.
@@ -90,14 +114,16 @@ pub struct HealthCheck {
     /// The notes with `repos:`, as `(path, repos, updated)`.
     notes: Vec<(String, Vec<String>, Option<String>)>,
     roots: Vec<PathBuf>,
+    cache: Cache,
 }
 
 /// The part of the report that comes from the index, and what the stale check will read.
-pub fn check(index: &Index, roots: Vec<PathBuf>) -> HealthCheck {
+/// `cache` has the commits earlier reports read.
+pub(crate) fn check(index: &Index, roots: Vec<PathBuf>, cache: Cache) -> HealthCheck {
     let orphans = index.graph().nodes.into_iter().filter(|node| node.links == 0).map(|node| node.path).collect();
     let notes = index.texts().map(|(path, text)| (path, meta(text))).filter(|(_, (repos, _))| !repos.is_empty());
     let notes = notes.map(|(path, (repos, updated))| (path.to_string(), repos, updated)).collect();
-    HealthCheck { broken: index.broken(), orphans, notes, roots }
+    HealthCheck { broken: index.broken(), orphans, notes, roots, cache }
 }
 
 /// Which commits of a repository an entry counts.
@@ -112,9 +138,9 @@ enum Scope {
 
 impl HealthCheck {
     /// The report. Runs git in the repositories the notes name, and reads nothing of the vault.
-    // shortcut: every report asks git again, twice per repository (three times with scopes
-    // or without `origin/HEAD`); keep the commits between reports, by the commit the default
-    // branch is at, if the panel gets slow in a vault that names many repositories.
+    // shortcut: every report still asks git twice per repository, for its root and for the commit
+    // its default branch is at, and walks the lookup folders; watch the repositories' refs if
+    // that gets slow in a vault that names hundreds of them.
     pub fn run(self) -> Health {
         // Many notes name the same repository, so each one is found once and its commits are
         // read once per scope, from the earliest day a note asks about.
@@ -146,7 +172,7 @@ impl HealthCheck {
                     continue;
                 };
                 let key = (name, scope);
-                let log = logs.entry(key.clone()).or_insert_with(|| commits(dir, &earliest[&key], &key.1));
+                let log = logs.entry(key.clone()).or_insert_with(|| commits(dir, &earliest[&key], &key.1, &self.cache));
                 // Days in the form `YYYY-MM-DD` are in order as text.
                 let mut newer = log.iter().filter(|commit| commit.date >= since);
                 if let Some(newest) = newer.next() {
@@ -185,9 +211,29 @@ fn repository(name: &str, folders: &[PathBuf]) -> Option<PathBuf> {
     (std::fs::canonicalize(&dir).ok()? == std::fs::canonicalize(top).ok()?).then_some(dir)
 }
 
+/// The commit the default branch is at. `origin/HEAD` is the remote's default branch as last
+/// fetched; a repository without it (never cloned, or the remote added by hand) is read from
+/// what is checked out. `None` in a repository without a commit.
+fn default_commit(dir: &Path) -> Option<String> {
+    // One run for both: with `--head` the list has `HEAD` itself and every ref that ends in `/HEAD`.
+    let out = git(dir, &["show-ref", "--head", "HEAD"])?;
+    let text = String::from_utf8_lossy(&out);
+    let at = |name: &str| text.lines().filter_map(|line| line.split_once(' ')).find(|(_, of)| *of == name).map(|(hash, _)| hash.to_string());
+    at("refs/remotes/origin/HEAD").or_else(|| at("HEAD"))
+}
+
 /// The commits of the default branch that are dated from the day `since` on and count in
-/// `scope`, newest first. None in a repository without a commit.
-fn commits(dir: &Path, since: &str, scope: &Scope) -> Vec<Newest> {
+/// `scope`, newest first, or more of them: from an earlier day, when an earlier report read
+/// those. None in a repository without a commit. Git reads the history only when `cache`
+/// has nothing for the commit the branch is at now.
+fn commits(dir: &Path, since: &str, scope: &Scope, cache: &Cache) -> Vec<Newest> {
+    let Some(rev) = default_commit(dir) else { return Vec::new() };
+    let key = (dir.to_path_buf(), scope.clone());
+    // Days in the form `YYYY-MM-DD` are in order as text.
+    let fresh = |kept: &&Kept| kept.rev == rev && kept.since.as_str() <= since;
+    if let Some(kept) = cache.lock().unwrap_or_else(PoisonError::into_inner).kept.get(&key).filter(fresh) {
+        return kept.log.clone();
+    }
     // Paths are from the repository's root and taken letter by letter: a `*` in a scope is no pattern.
     let only = |path: &str| format!(":(top,literal){path}");
     let not = |path: &str| format!(":(top,exclude,literal){path}");
@@ -200,21 +246,24 @@ fn commits(dir: &Path, since: &str, scope: &Scope) -> Vec<Newest> {
         Scope::Only(dir) => paths.push(only(dir)),
         Scope::Except(dir) => paths.extend([":(top)".to_string(), not(dir)]),
     }
-    let since = format!("--since={since}T00:00:00");
-    // `origin/HEAD` is the remote's default branch as last fetched. A repository without it
-    // (never cloned, or the remote added by hand) is read from what is checked out.
-    let log = ["refs/remotes/origin/HEAD", "HEAD"].iter().find_map(|branch| {
-        // `%cd` with this date format is the commit's day in local time, as `--since` reads a day.
-        let mut args = vec!["log", branch, "--date=format-local:%Y-%m-%d", "--format=%cd%x1f%h%x1f%s", since.as_str(), "--"];
-        args.extend(paths.iter().map(String::as_str));
-        git(dir, &args)
-    });
-    let log = String::from_utf8_lossy(&log.unwrap_or_default()).into_owned();
+    let from = format!("--since={since}T00:00:00");
+    // `%cd` with this date format is the commit's day in local time, as `--since` reads a day.
+    let mut args = vec!["log", rev.as_str(), "--date=format-local:%Y-%m-%d", "--format=%cd%x1f%h%x1f%s", from.as_str(), "--"];
+    args.extend(paths.iter().map(String::as_str));
+    // Git is not run while the cache is held: another report may read another repository meanwhile.
+    let Some(out) = git(dir, &args) else { return Vec::new() };
     let commit = |line: &str| {
         let mut fields = line.split('\x1f').map(str::to_string);
         Some(Newest { date: fields.next()?, rev: fields.next()?, subject: fields.next()? })
     };
-    log.lines().filter_map(commit).collect()
+    let log: Vec<Newest> = String::from_utf8_lossy(&out).lines().filter_map(commit).collect();
+    let mut logs = cache.lock().unwrap_or_else(PoisonError::into_inner);
+    #[cfg(test)]
+    {
+        logs.read += 1;
+    }
+    logs.kept.insert(key, Kept { rev, since: since.to_string(), log: log.clone() });
+    log
 }
 
 /// `~` and `~/…` as the home folder.
@@ -419,7 +468,7 @@ mod tests {
     /// `(commits, subject of the newest)` when it is stale, and whether it could be checked.
     fn checked(entry: &str, roots: &Path) -> (Option<(usize, String)>, bool) {
         let notes = vec![("note.md".to_string(), vec![entry.to_string()], Some("2026-03-02".to_string()))];
-        let health = HealthCheck { broken: Vec::new(), orphans: Vec::new(), notes, roots: vec![roots.to_path_buf()] }.run();
+        let health = HealthCheck { broken: Vec::new(), orphans: Vec::new(), notes, roots: vec![roots.to_path_buf()], cache: Cache::default() }.run();
         (health.stale.first().map(|stale| (stale.commits, stale.newest.subject.clone())), health.unchecked.is_empty())
     }
 
@@ -476,6 +525,56 @@ mod tests {
     }
 
     #[test]
+    fn a_repository_whose_default_branch_did_not_move_is_not_read_again() {
+        if !has_git() {
+            return;
+        }
+        let roots = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let app = roots.path().join("app");
+        repo(&app);
+        commit(&app, "2026-03-05", &["api/a.rs"], "a");
+        let cache = Cache::default();
+        // The report for one note, as `(commits, subject of the newest)`, and how many times `git log` has run by then.
+        let report = |entry: &str, updated: &str| {
+            let notes = vec![("note.md".to_string(), vec![entry.to_string()], Some(updated.to_string()))];
+            let health = HealthCheck { broken: Vec::new(), orphans: Vec::new(), notes, roots: vec![roots.path().to_path_buf()], cache: cache.clone() }.run();
+            (health.stale.first().map(|stale| (stale.commits, stale.newest.subject.clone())), cache.lock().unwrap().read)
+        };
+        let stale = |commits: usize, subject: &str| Some((commits, subject.to_string()));
+        assert_eq!(report("app", "2026-03-02"), (stale(1, "a"), 1));
+        assert_eq!(report("app", "2026-03-02"), (stale(1, "a"), 1));
+        // A later day is answered from what is kept, an earlier one is not in it.
+        assert_eq!(report("app", "2026-03-04"), (stale(1, "a"), 1));
+        assert_eq!(report("app", "2026-03-05"), (None, 1));
+        assert_eq!(report("app", "2026-02-01"), (stale(2, "a"), 2));
+        assert_eq!(report("app", "2026-03-02"), (stale(1, "a"), 2));
+        // Each scope is kept by itself.
+        assert_eq!(report("app:api", "2026-03-02"), (stale(1, "a"), 3));
+        assert_eq!(report("app:!api", "2026-03-02"), (None, 4));
+        assert_eq!(report("app:api", "2026-03-02"), (stale(1, "a"), 4));
+        // A new commit is seen at the next report, in every scope.
+        commit(&app, "2026-03-07", &["web/b.ts"], "b");
+        assert_eq!(report("app", "2026-03-02"), (stale(2, "b"), 5));
+        assert_eq!(report("app:!api", "2026-03-02"), (stale(1, "b"), 6));
+        assert_eq!(report("app:api", "2026-03-02"), (stale(1, "a"), 7));
+        assert_eq!(report("app", "2026-03-02"), (stale(2, "b"), 7));
+
+        // A clone is known by `origin/HEAD`: a commit on what is checked out does not make it read again, a fetch does.
+        let (origin, clone) = (outside.path().join("origin"), roots.path().join("cloned"));
+        repo(&origin);
+        git_on(roots.path(), "2026-03-01", &["clone", "-q", origin.to_str().unwrap(), "cloned"]);
+        assert_eq!(report("cloned", "2026-03-02"), (None, 8));
+        git_on(&clone, "2026-03-05", &["checkout", "-q", "-b", "feature"]);
+        commit(&clone, "2026-03-05", &["feature.rs"], "feature");
+        assert_eq!(report("cloned", "2026-03-02"), (None, 8));
+        commit(&origin, "2026-03-06", &["main.rs"], "on main");
+        git_on(&clone, "2026-03-06", &["fetch", "-q"]);
+        assert_eq!(report("cloned", "2026-03-02"), (stale(1, "on main"), 9));
+        assert_eq!(report("cloned", "2026-03-02"), (stale(1, "on main"), 9));
+    }
+
+    #[test]
     fn notes_of_different_days_that_name_one_repository_each_get_their_own_count() {
         if !has_git() {
             return;
@@ -487,7 +586,7 @@ mod tests {
         commit(&app, "2026-03-07", &["b.rs"], "b");
         let note = |updated: &str| (format!("{updated}.md"), vec!["app".to_string()], Some(updated.to_string()));
         let notes = ["2026-03-06", "2026-02-01", "2026-03-07", "2026-03-04"].map(note).to_vec();
-        let health = HealthCheck { broken: Vec::new(), orphans: Vec::new(), notes, roots: vec![roots.path().to_path_buf()] }.run();
+        let health = HealthCheck { broken: Vec::new(), orphans: Vec::new(), notes, roots: vec![roots.path().to_path_buf()], cache: Cache::default() }.run();
         let stale: Vec<(&str, usize, &str)> = health.stale.iter().map(|stale| (stale.updated.as_str(), stale.commits, stale.newest.subject.as_str())).collect();
         assert_eq!(stale, [("2026-03-06", 1, "b"), ("2026-02-01", 3, "b"), ("2026-03-04", 2, "b")]);
     }

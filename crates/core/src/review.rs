@@ -10,6 +10,10 @@
 //! vault: a state file there would itself show up as a change. Every operation reads
 //! that file again, so the app and `inklode-mcp` agree when both have a vault open.
 //!
+//! The operations run without the core being held (`Core::outside`), so two can run at
+//! once in one program. Each one that changes the state file reads it, changes it and
+//! writes it back while it holds `STATE`, so no change is lost to another.
+//!
 //! A note the user accepted with a text other than the one at `base` is kept there with
 //! that text. From then on the note is compared with it and not with `base`: it waits
 //! when it differs from the accepted text, and that is the text a reject goes back to.
@@ -20,12 +24,33 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::git::{Commit, FORMAT, blobs, commits, git};
 use crate::vault::{hidden, real};
+
+/// Held from reading a state file to writing it back, and while one is read: a reader
+/// never sees a first use half done, and two writers never both start from the same file.
+// shortcut: one lock for all vaults and for this program only, so the app and `inklode-mcp`
+// writing the state of one vault in the same moment can still lose one of the two changes;
+// lock the file itself (`flock`) if both are used on one vault at once.
+static STATE: Mutex<()> = Mutex::new(());
+
+fn held() -> MutexGuard<'static, ()> {
+    // The guard holds no data, so a holder that panicked left nothing half changed in it.
+    STATE.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// For this many notes or fewer, git is asked about those notes alone (`changes`).
+const FEW: usize = 64;
+
+/// `paths` when they are few enough to ask git about them alone, else `None` for the whole vault.
+fn few<'a, 'b>(paths: &'b [&'a str]) -> Option<&'b [&'a str]> {
+    (paths.len() <= FEW).then_some(paths)
+}
 
 /// What the user has seen of one vault.
 #[derive(Serialize, Deserialize)]
@@ -132,9 +157,16 @@ struct Change {
 }
 
 /// The notes the commit `rev` has in the vault's folder, by path, each with the hash of its text.
-fn notes_at(root: &Path, rev: &str) -> BTreeMap<String, String> {
+/// With `only`, those of them that are among these paths.
+fn notes_at(root: &Path, rev: &str, only: Option<&[&str]>) -> BTreeMap<String, String> {
     // Without `--full-tree` the names are as seen from the vault's folder, which need not be the repository's root.
-    let out = git(root, &["ls-tree", "-r", "-z", rev]).unwrap_or_default();
+    // `ls-tree` takes the paths letter by letter, and after `--` also one that starts with a dash.
+    let mut args = vec!["ls-tree", "-r", "-z", rev];
+    if let Some(only) = only {
+        args.push("--");
+        args.extend(only);
+    }
+    let out = git(root, &args).unwrap_or_default();
     let text = String::from_utf8_lossy(&out);
     // `<mode> <type> <hash>`, a tab, the path. A mode other than a file's is a link or another repository.
     let entry = |entry: &str| {
@@ -147,24 +179,40 @@ fn notes_at(root: &Path, rev: &str) -> BTreeMap<String, String> {
 }
 
 /// The notes on disk that git tracks, or does not track and is not told to ignore. Git
-/// lists names for this and reads no note.
-fn notes_listed(root: &Path) -> Vec<String> {
-    let out = git(root, &["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "."]).unwrap_or_default();
+/// lists names for this and reads no note. With `only`, those of them that are among these paths.
+fn notes_listed(root: &Path, only: Option<&[&str]>) -> Vec<String> {
+    let mut args = vec!["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--"];
+    match only {
+        // A note's name is no pattern: `*.md` is the one file of that name.
+        Some(only) => {
+            args.insert(0, "--literal-pathspecs");
+            args.extend(only);
+        }
+        None => args.push("."),
+    }
+    let out = git(root, &args).unwrap_or_default();
     String::from_utf8_lossy(&out).split('\0').filter(|path| is_note(path)).map(str::to_string).collect()
 }
 
 /// Every note of the vault whose text on disk differs from the commit `rev`, by path. A
-/// note the commit does not have is in it when it has text.
-// shortcut: reads every note of the commit from git and from disk on each call; remember
+/// note the commit does not have is in it when it has text. With `only`, git and the disk are
+/// asked about those paths alone, and the answer is what the whole answer has of them: what
+/// one note costs does not grow with the vault.
+// shortcut: without `only`, reads every note of the commit from git and from disk on each call; remember
 // the comparison per commit and file time if the inbox gets slow in a vault of many thousand notes
-fn changes(root: &Path, rev: &str) -> BTreeMap<String, Change> {
-    let at_rev = notes_at(root, rev);
+fn changes(root: &Path, rev: &str, only: Option<&[&str]>) -> BTreeMap<String, Change> {
+    if only.is_some_and(<[&str]>::is_empty) {
+        return BTreeMap::new();
+    }
+    let at_rev = notes_at(root, rev, only);
     let hashes: Vec<&str> = at_rev.values().map(String::as_str).collect();
     let committed = blobs(root, &hashes).unwrap_or_default();
     // An object the repository does not have (a partial clone) counts as an empty text.
     let mut was: BTreeMap<&str, Vec<u8>> = at_rev.keys().map(String::as_str).zip(committed.into_iter().map(Option::unwrap_or_default)).collect();
-    let listed = notes_listed(root);
-    let paths: BTreeSet<&str> = at_rev.keys().chain(&listed).map(String::as_str).collect();
+    let listed = notes_listed(root, only);
+    // A path that is a folder would bring the notes in it: only what was asked about.
+    let asked = |path: &&str| only.is_none_or(|only| only.contains(path));
+    let paths: BTreeSet<&str> = at_rev.keys().chain(&listed).map(String::as_str).filter(asked).collect();
     let mut found = BTreeMap::new();
     for path in paths {
         let new = !at_rev.contains_key(path);
@@ -256,11 +304,12 @@ fn save(dir: &Path, root: &Path, state: &State) -> Result<(), Error> {
 
 /// The state in which nothing waits: `head` is seen, and so is every note that is not committed.
 fn all_seen(root: &Path, head: &str) -> State {
-    let accepted = changes(root, head).into_keys().map(|path| (path.clone(), Seen::of(read(root, &path)))).collect();
+    let accepted = changes(root, head, None).into_keys().map(|path| (path.clone(), Seen::of(read(root, &path)))).collect();
     State { vault: root.display().to_string(), base: head.to_string(), accepted }
 }
 
 /// The vault's state and the commit the branch is on. `None` when there is no repository to compare with.
+/// The first use writes the state file, so the caller holds `STATE`.
 fn open(dir: &Path, root: &Path) -> Result<Option<(State, String)>, Error> {
     let Some(head) = head(root) else { return Ok(None) };
     let kept = fs::read(state_file(dir, root)).ok().and_then(|bytes| serde_json::from_slice::<State>(&bytes).ok());
@@ -284,10 +333,14 @@ fn open(dir: &Path, root: &Path) -> Result<Option<(State, String)>, Error> {
 
 /// The notes whose text is not the one the user last saw: the accepted one, else that of `base`.
 pub fn list(dir: &Path, root: &Path) -> Result<Inbox, Error> {
-    let Some((state, head)) = open(dir, root)? else { return Ok(Inbox { repository: false, entries: Vec::new() }) };
-    let since_base = changes(root, &state.base);
+    let opened = {
+        let _held = held();
+        open(dir, root)?
+    };
+    let Some((state, head)) = opened else { return Ok(Inbox { repository: false, entries: Vec::new() }) };
+    let since_base = changes(root, &state.base, None);
     // What is not committed: when `base` is the last commit that is everything found, else it is asked for.
-    let since_head = (state.base != head).then(|| changes(root, &head));
+    let since_head = (state.base != head).then(|| changes(root, &head, None));
     let dirty = since_head.as_ref().unwrap_or(&since_base);
     let mut entries: BTreeMap<String, Entry> = BTreeMap::new();
     // An accepted note can wait with the text of `base`: when it went back to it after the accept.
@@ -328,7 +381,11 @@ pub fn list(dir: &Path, root: &Path) -> Result<Inbox, Error> {
 /// The text the note is compared with: the one the user last accepted, else the one at
 /// `base`. `None` when there was no note then, or it is not text.
 pub fn base(dir: &Path, root: &Path, path: &str) -> Result<Option<String>, Error> {
-    let Some((state, _)) = open(dir, root)? else { return Ok(None) };
+    let opened = {
+        let _held = held();
+        open(dir, root)?
+    };
+    let Some((state, _)) = opened else { return Ok(None) };
     if let Some(Seen::Text { text }) = state.accepted.get(path) {
         return Ok(text.clone());
     }
@@ -338,10 +395,11 @@ pub fn base(dir: &Path, root: &Path, path: &str) -> Result<Option<String>, Error
 /// Marks the text one note has on disk now as seen, or with no path everything: the
 /// last commit becomes `base` and what is not committed is accepted as it is.
 pub fn accept(dir: &Path, root: &Path, path: Option<&str>) -> Result<(), Error> {
+    let _held = held();
     let Some((mut state, head)) = open(dir, root)? else { return Ok(()) };
     match path {
         Some(path) => {
-            let changed = changes(root, &state.base).contains_key(path);
+            let changed = changes(root, &state.base, Some(&[path])).contains_key(path);
             accept_now(&mut state, root, path, changed);
         }
         None => state = all_seen(root, &head),
@@ -352,6 +410,7 @@ pub fn accept(dir: &Path, root: &Path, path: Option<&str>) -> Result<(), Error> 
 /// The app wrote the user's own edit of a note: `after` in place of `before`. If `before`
 /// was not waiting for review, `after` does not either. A note that was waiting stays.
 pub fn saved(dir: &Path, root: &Path, path: &str, before: &str, after: &str) -> Result<(), Error> {
+    let _held = held();
     let Some((mut state, _)) = open(dir, root)? else { return Ok(()) };
     // The file has `after` by now, so what `before` was to `base` is asked of the commit.
     let at_base = committed(root, &state.base, path).unwrap_or_default();
@@ -372,8 +431,13 @@ pub fn saved(dir: &Path, root: &Path, path: &str, before: &str, after: &str) -> 
 /// first use is what makes the state, with everything seen.
 pub fn settled<'a>(dir: Option<&Path>, root: &Path, paths: impl IntoIterator<Item = &'a str>) -> Vec<String> {
     let Some(dir) = dir.filter(|dir| state_file(dir, root).exists()) else { return Vec::new() };
-    let Ok(Some((state, _))) = open(dir, root) else { return Vec::new() };
-    let changed = changes(root, &state.base);
+    let opened = {
+        let _held = held();
+        open(dir, root)
+    };
+    let Ok(Some((state, _))) = opened else { return Vec::new() };
+    let paths: Vec<&str> = paths.into_iter().collect();
+    let changed = changes(root, &state.base, few(&paths));
     let settled = |path: &&str| is_note(path) && !waits(&state, path, &on_disk(root, path), changed.contains_key(*path));
     paths.into_iter().filter(settled).map(str::to_string).collect()
 }
@@ -382,8 +446,10 @@ pub fn settled<'a>(dir: Option<&Path>, root: &Path, paths: impl IntoIterator<Ite
 /// gone as a deletion, so what the user did in the app does not wait for the user's review.
 pub fn accept_own(dir: Option<&Path>, root: &Path, paths: &[String]) {
     let Some(dir) = dir.filter(|_| !paths.is_empty()) else { return };
+    let _held = held();
     let Ok(Some((mut state, _))) = open(dir, root) else { return };
-    let changed = changes(root, &state.base);
+    let asked: Vec<&str> = paths.iter().map(String::as_str).collect();
+    let changed = changes(root, &state.base, few(&asked));
     for path in paths {
         accept_now(&mut state, root, path, changed.contains_key(path));
     }
@@ -393,7 +459,89 @@ pub fn accept_own(dir: Option<&Path>, root: &Path, paths: &[String]) {
 
 #[cfg(test)]
 mod tests {
-    use super::line_counts;
+    use std::fs;
+    use std::path::Path;
+
+    use super::{accept, changes, held, line_counts, list, open, saved};
+
+    /// Runs git in `dir` as a committer, or says that there is no git here.
+    fn git_in(dir: &Path, args: &[&str]) -> bool {
+        let config = ["-c", "user.name=Ana", "-c", "user.email=ana@example.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"];
+        let run = std::process::Command::new("git").current_dir(dir).args(config).args(args).env("GIT_CONFIG_GLOBAL", "/dev/null").env("GIT_CONFIG_NOSYSTEM", "1").output();
+        run.is_ok_and(|out| out.status.success())
+    }
+
+    /// A vault that is a repository with `notes` committed. `None` without git.
+    fn repository(notes: &[(&str, &str)]) -> Option<tempfile::TempDir> {
+        let dir = tempfile::tempdir().unwrap();
+        // The real path: the state is kept under the name `Vault::open` gives the folder.
+        let root = dir.path().canonicalize().unwrap();
+        for (path, text) in notes {
+            fs::create_dir_all(root.join(path).parent().unwrap()).unwrap();
+            fs::write(root.join(path), text).unwrap();
+        }
+        (git_in(&root, &["init", "-q"]) && git_in(&root, &["add", "-A"]) && git_in(&root, &["commit", "-q", "-m", "first"])).then_some(dir)
+    }
+
+    #[test]
+    fn asking_about_a_few_notes_gives_what_the_whole_answer_has_of_them() {
+        let notes = [("same.md", "same\n"), ("changed.md", "one\n"), ("gone.md", "gone\n"), ("dir/in.md", "in\n"), ("dir/other.md", "other\n"), ("*.md", "star\n"), ("-dash.md", "dash\n"), (".gitignore", "ignored.md\n")];
+        let Some(dir) = repository(&notes) else { return };
+        let root = dir.path().canonicalize().unwrap();
+        fs::write(root.join("changed.md"), "one\ntwo\n").unwrap();
+        fs::remove_file(root.join("gone.md")).unwrap();
+        fs::write(root.join("dir/in.md"), "IN\n").unwrap();
+        fs::write(root.join("dir/other.md"), "OTHER\n").unwrap();
+        fs::write(root.join("*.md"), "STAR\n").unwrap();
+        fs::write(root.join("-dash.md"), "DASH\n").unwrap();
+        fs::write(root.join("new.md"), "new\n").unwrap();
+        fs::write(root.join("empty.md"), "").unwrap();
+        fs::write(root.join("ignored.md"), "ignored\n").unwrap();
+        let found = |only: Option<&[&str]>| -> Vec<(String, bool, usize, usize)> {
+            changes(&root, "HEAD", only).into_iter().map(|(path, change)| (path, change.new, change.added, change.removed)).collect()
+        };
+        let whole = found(None);
+        let names: Vec<&str> = whole.iter().map(|(path, ..)| path.as_str()).collect();
+        assert_eq!(names, ["*.md", "-dash.md", "changed.md", "dir/in.md", "dir/other.md", "gone.md", "new.md"]);
+        // Each note alone, the ones that did not change and the one that is not there included.
+        for path in ["same.md", "changed.md", "gone.md", "dir/in.md", "*.md", "-dash.md", "new.md", "empty.md", "ignored.md", "never.md"] {
+            let of_it: Vec<_> = whole.iter().filter(|(name, ..)| name == path).cloned().collect();
+            assert_eq!(found(Some(&[path])), of_it, "{path}");
+        }
+        // `*.md` is one file, a folder brings nothing of what is in it, and no path is no question.
+        assert_eq!(found(Some(&["*.md"])).len(), 1);
+        assert_eq!(found(Some(&["dir"])), []);
+        assert_eq!(found(Some(&[])), []);
+        let some: Vec<_> = whole.iter().filter(|(name, ..)| name == "dir/in.md" || name == "gone.md").cloned().collect();
+        assert_eq!(found(Some(&["gone.md", "same.md", "dir/in.md"])), some);
+    }
+
+    #[test]
+    fn changes_made_at_the_same_time_are_all_kept() {
+        let names: Vec<String> = (0..12).map(|n| format!("n{n}.md")).collect();
+        let notes: Vec<(&str, &str)> = names.iter().map(|name| (name.as_str(), "old\n")).collect();
+        let Some(dir) = repository(&notes) else { return };
+        let (root, state) = (dir.path().canonicalize().unwrap(), tempfile::tempdir().unwrap());
+        assert!(list(state.path(), &root).unwrap().entries.is_empty());
+        // Half are the user's saves, half are accepted after someone else changed them, and the inbox is read meanwhile.
+        std::thread::scope(|scope| {
+            for (n, name) in names.iter().enumerate() {
+                let (root, state) = (&root, state.path());
+                scope.spawn(move || {
+                    if n % 2 == 0 {
+                        saved(state, root, name, "old\n", &format!("mine {n}\n")).unwrap();
+                    } else {
+                        fs::write(root.join(name), format!("theirs {n}\n")).unwrap();
+                        accept(state, root, Some(name)).unwrap();
+                    }
+                    list(state, root).unwrap();
+                });
+            }
+        });
+        let _held = held();
+        let (kept, _) = open(state.path(), &root).unwrap().unwrap();
+        assert_eq!(kept.accepted.keys().collect::<Vec<_>>(), { let mut all: Vec<&String> = names.iter().collect(); all.sort(); all });
+    }
 
     /// The same answer the slow way: the longest common run of lines, by the table.
     fn slow(was: &str, now: &str) -> (usize, usize) {

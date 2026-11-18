@@ -8,7 +8,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use crate::index::{Index, relocate};
-use crate::vault::hidden;
+use crate::vault::{Write, hidden};
 use crate::watch::{Listener, Watcher, watch};
 use crate::{Error, Vault, claims, git, health, review};
 
@@ -25,6 +25,8 @@ pub struct Core {
     /// Where the `review.*` operations keep what the user has seen and the `claims.*`
     /// operations the results of their checks, outside every vault.
     state_dir: Option<PathBuf>,
+    /// The commits `vault.health` read from the repositories the notes name, kept between reports.
+    health_logs: health::Cache,
 }
 
 /// What one `claims.check` needs of the core, taken out of it by [`Core::claim_check`], so
@@ -46,6 +48,67 @@ impl ClaimCheck {
         let p: LineParams = parse("claims.check", params)?;
         let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_secs());
         Ok(json!(claims::check(&self.dir, &self.vault, note_path(&p.path)?, p.line, commands, now, claims::TIMEOUT)?))
+    }
+}
+
+/// What the `git.*` and `review.*` operations need of the core, taken out of it by
+/// [`Core::outside`], so that a host can run them without holding the core: they run git and
+/// compare every note with a commit, which takes from tens of milliseconds to a second in a
+/// large vault, and the window reads and saves notes meanwhile. They use nothing else of the
+/// core: not the index, and of the vault only its folder.
+pub struct Outside {
+    /// The state folder, for the `review.*` operations.
+    dir: Option<PathBuf>,
+    vault: Vault,
+}
+
+impl Outside {
+    /// Whether `name` is an operation that runs here: a host asks before it takes the core.
+    pub fn has(name: &str) -> bool {
+        name.starts_with("git.") || name.starts_with("review.")
+    }
+
+    /// Runs the operation `name`, as `Core::call` does (its table has the params and what is returned).
+    pub fn run(&self, name: &str, params: Value) -> Result<Value, Error> {
+        let vault = &self.vault;
+        let dir = || self.dir.as_deref().ok_or(Error::NoStateFolder);
+        match name {
+            "git.log" => {
+                let p: PathParam = parse(name, params)?;
+                Ok(json!(git::log(vault.root(), git_path(vault, &p.path)?)))
+            }
+            "git.show" => {
+                let p: ShowParams = parse(name, params)?;
+                // Only a hash reaches git: not a branch, not `HEAD~1`, and nothing git could read as an option.
+                let hash = |rev: &&str| (4..=64).contains(&rev.len()) && rev.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+                let rev = p.rev.as_deref();
+                if rev.is_some() && rev.filter(hash).is_none() {
+                    return Err(Error::BadParams(name.to_string(), "rev is not a commit hash".to_string()));
+                }
+                Ok(json!({ "content": git::show(vault.root(), git_path(vault, &p.path)?, rev) }))
+            }
+            "git.blame" => {
+                let p: PathParam = parse(name, params)?;
+                Ok(json!(git::blame(vault.root(), git_path(vault, &p.path)?)))
+            }
+            "review.list" => Ok(json!(review::list(dir()?, vault.root())?)),
+            "review.base" => {
+                let p: PathParam = parse(name, params)?;
+                Ok(json!({ "content": review::base(dir()?, vault.root(), git_path(vault, &p.path)?)? }))
+            }
+            "review.accept" => {
+                let p: AcceptParams = parse(name, params)?;
+                let path = p.path.as_deref().map(|path| git_path(vault, path)).transpose()?;
+                review::accept(dir()?, vault.root(), path)?;
+                Ok(Value::Null)
+            }
+            "review.saved" => {
+                let p: SavedParams = parse(name, params)?;
+                review::saved(dir()?, vault.root(), git_path(vault, &p.path)?, &p.before, &p.after)?;
+                Ok(Value::Null)
+            }
+            _ => Err(Error::UnknownCall(name.to_string())),
+        }
     }
 }
 
@@ -158,10 +221,16 @@ impl Core {
         Ok(ClaimCheck { dir: self.state_dir.clone().ok_or(Error::NoStateFolder)?, vault: self.vault()?.clone() })
     }
 
+    /// What the `git.*` and `review.*` operations need, to run them after the core is let go of.
+    pub fn outside(&self) -> Result<Outside, Error> {
+        Ok(Outside { dir: self.state_dir.clone(), vault: self.vault()?.clone() })
+    }
+
     /// What `vault.health` needs, to run its git part after the core is let go of.
     pub fn health_check(&mut self) -> Result<health::HealthCheck, Error> {
+        let cache = self.health_logs.clone();
         let (_, index) = self.fresh()?;
-        Ok(health::check(index, health::roots()))
+        Ok(health::check(index, health::roots(), cache))
     }
 
     /// Runs one named operation with JSON params and returns JSON.
@@ -181,7 +250,9 @@ impl Core {
     /// empty and `content` is null.
     ///
     /// The `review.*` operations are the inbox of notes changed since the user last
-    /// looked (review.rs). They read git and never write to the repository or the vault;
+    /// looked (review.rs). Like the `git.*` operations they use only the vault's folder, so a
+    /// host that shares the core runs both kinds as [`Core::outside`] and [`Outside::run`], to let
+    /// go of the core while git runs. They read git and never write to the repository or the vault;
     /// what was seen is kept in the state folder (`set_state_dir`). `base` is a commit:
     /// the last one when review is first used in a vault, so nothing waits then, not
     /// even what is uncommitted at that moment. A note that was accepted with another
@@ -211,7 +282,7 @@ impl Core {
     /// | `config.write`   | `{path, content}` | `null`. `path` as for `config.read` |
     /// | `note.resolve`   | `{link, from}`    | `{path}`, null if no note matches |
     /// | `note.backlinks` | `{path}`          | list of `{path, line, text}`      |
-    /// | `note.rename`    | `{from, to, own?}` | `{updated}`: the notes that did not move and had links rewritten. Any file, not only a note: an image's embeds are rewritten too. `from` may be spelled in another case or normal form than on disk, where the disk ignores those. Fails with `BadName`, before anything moves, when the new name (or a folder the move would make) has one of `[ ] # \| ^` or starts or ends with a space, since no link could say it |
+    /// | `note.rename`    | `{from, to, own?}` | `{updated}`: the notes that did not move and had links rewritten. Any file, not only a note: an image's embeds are rewritten too. `from` may be spelled in another case or normal form than on disk, where the disk ignores those. Fails with `BadName`, before anything moves, when the new name (or a folder the move would make) has one of `[ ] # \| ^` or starts or ends with a space, since no link could say it. The notes are rewritten together (`Vault::write_all`), each through a temporary file that is flushed to the disk first; one that another program changed while the rename ran keeps its old links, and the rename then fails with `Conflict` after the others are done |
     /// | `folder.rename`  | `{from, to, own?}` | `{updated}`, as `note.rename`. The folder moves with everything in it; `to` must not exist, be inside `from`, or be in a dot folder |
     /// | `folder.delete`  | `{path, own?}`    | `{trashed}`: the folder moves whole under `.trash/`, as `note.delete` moves a file |
     /// | `folder.new`     | `{path}`          | `null`. Makes an empty folder; fails if the path is taken |
@@ -219,7 +290,7 @@ impl Core {
     /// | `search`         | `{query}`       | list of `{path, line, text}`, `line` 0 for a file-name match |
     /// | `config.list`    | none              | `{themes, snippets}`: names of the `.css` files in `.inklode/themes` and `.inklode/snippets`, without extension |
     /// | `vault.graph`    | none              | `{nodes, edges}`: every note as `{path, links}` (`links` counts its edges), and an edge `{from, to}` for each note that links to another |
-    /// | `vault.health`   | none              | `{broken, orphans, stale, unchecked}` (health.rs). `broken`: the notes with links or embeds that reach no note and no file, by path, each `{path, links}` with `links` as `{line, link, text}` (`link` is the text between the brackets). `orphans`: the paths of the notes with no link to another note and none from one. `stale`: `{path, updated, repo, dir, commits, newest}` for each note and entry of its frontmatter `repos:` whose repository has commits on its default branch dated after the note's `updated:` day (an entry `name:dir` counts the commits under `dir`, `name:!dir` those outside it; commits of housekeeping files alone do not count); `repo` is the entry as written, `dir` the repository's root, `commits` how many there are and `newest` the last of them as `{date, rev, subject}` with the short hash. `unchecked`: `{path, repo, reason}` for a `repos:` entry that is not the root of a git repository, and with `repo` null for a note with `repos:` and no valid `updated:`. Runs `git log` in those repositories and writes nothing. A host that shares the core runs it as `Core::health_check` and `HealthCheck::run`, to let go of the core while git runs |
+    /// | `vault.health`   | none              | `{broken, orphans, stale, unchecked}` (health.rs). `broken`: the notes with links or embeds that reach no note and no file, by path, each `{path, links}` with `links` as `{line, link, text}` (`link` is the text between the brackets). `orphans`: the paths of the notes with no link to another note and none from one. `stale`: `{path, updated, repo, dir, commits, newest}` for each note and entry of its frontmatter `repos:` whose repository has commits on its default branch dated after the note's `updated:` day (an entry `name:dir` counts the commits under `dir`, `name:!dir` those outside it; commits of housekeeping files alone do not count); `repo` is the entry as written, `dir` the repository's root, `commits` how many there are and `newest` the last of them as `{date, rev, subject}` with the short hash. `unchecked`: `{path, repo, reason}` for a `repos:` entry that is not the root of a git repository, and with `repo` null for a note with `repos:` and no valid `updated:`. Runs `git log` in those repositories and writes nothing; the commits read are kept while a repository's default branch stays at the same commit, so a report on repositories that did not change asks each only where that branch is. A host that shares the core runs it as `Core::health_check` and `HealthCheck::run`, to let go of the core while git runs |
     /// | `vault.tasks`    | none              | list of `{path, tasks}`, by path: the notes with open checkboxes (`- [ ]`, also after `*`, `+`, `1.` and `1)`) outside fenced code blocks, `tasks` as `{line, text}` with `line` from 1 |
     /// | `git.log`        | `{path}`          | list of `{rev, author, date, subject}`: the commits that changed the file, newest first, through renames. `rev` is the full hash, `date` the author date as ISO 8601 |
     /// | `git.show`       | `{path, rev?}`    | `{content}`: the file's text in the commit `rev` (a hash of 4 to 64 hex digits, else `BadParams`), under the name it had then; without `rev`, in the last commit. Null when there is no such version |
@@ -331,23 +402,37 @@ impl Core {
                 // link is ever rewritten for a file that did not move.
                 let settled = review::settled(dir.as_deref(), vault.root(), index.affected(&from, &p.to));
                 vault.rename(&from, &p.to)?;
+                let notes = index.affected(&from, &p.to);
+                // Each note that has links to rewrite, as its path now, the text it has and the text it gets.
+                // Read from disk, not from the index, so an edit the watcher has not reported yet is kept.
+                let rewrite = |note: &&str| -> Result<Option<(String, String, String)>, Error> {
+                    let path = relocate(note, &from, &p.to);
+                    let content = vault.read(&path)?;
+                    Ok(index.rewrite_links(&after, note, &content, &from, &p.to)?.map(|text| (path, content, text)))
+                };
+                let rewritten: Vec<_> = notes.iter().map(rewrite).collect();
+                // Written together (`Vault::write_all`), which is what makes a rename of a note that a thousand
+                // notes link to take a second and not nine. A note that another program changed since it was
+                // read here is not written over: it fails with `Conflict` and keeps its old links.
+                let written = {
+                    let writes: Vec<Write> = rewritten.iter().flatten().flatten().map(|(path, content, text)| Write { path, content: text, base: Some(content) }).collect();
+                    vault.write_all(&writes)
+                };
+                let mut written = written.into_iter();
                 let mut updated = Vec::new();
                 let mut failed = None;
-                for note in index.affected(&from, &p.to) {
-                    let path = relocate(note, &from, &p.to);
-                    // Read from disk, not from the index, so an edit the watcher
-                    // has not reported yet is not overwritten.
-                    let rewritten = vault.read(&path).and_then(|content| {
-                        match index.rewrite_links(&after, note, &content, &from, &p.to)? {
-                            Some(text) => vault.write(&path, &text).map(|()| true),
-                            None => Ok(false),
-                        }
-                    });
-                    match rewritten {
-                        Ok(true) if path == note => updated.push(path),
-                        Ok(_) => {}
+                for (note, rewritten) in notes.iter().zip(rewritten) {
+                    let done = match rewritten {
+                        Ok(Some((path, ..))) => written.next().expect("one answer per write").map(|()| path == *note),
+                        Ok(None) => Ok(false),
+                        Err(e) => Err(e),
+                    };
+                    match done {
+                        Ok(true) => updated.push(note.to_string()),
+                        Ok(false) => {}
                         // A note that cannot be rewritten keeps its old links. The
                         // others are still done, so as few links as possible are left broken.
+                        // The failure reported is that of the first such note in the order of the index.
                         Err(e) => failed = failed.or(Some(e)),
                     }
                 }
@@ -397,49 +482,9 @@ impl Core {
                     "snippets": vault.css_names(".inklode/snippets")?,
                 }))
             }
-            "git.log" => {
-                let p: PathParam = parse(name, params)?;
-                let vault = self.vault()?;
-                Ok(json!(git::log(vault.root(), git_path(vault, &p.path)?)))
-            }
-            "git.show" => {
-                let p: ShowParams = parse(name, params)?;
-                let vault = self.vault()?;
-                // Only a hash reaches git: not a branch, not `HEAD~1`, and nothing git could read as an option.
-                let hash = |rev: &&str| (4..=64).contains(&rev.len()) && rev.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
-                let rev = p.rev.as_deref();
-                if rev.is_some() && rev.filter(hash).is_none() {
-                    return Err(Error::BadParams(name.to_string(), "rev is not a commit hash".to_string()));
-                }
-                Ok(json!({ "content": git::show(vault.root(), git_path(vault, &p.path)?, rev) }))
-            }
-            "git.blame" => {
-                let p: PathParam = parse(name, params)?;
-                let vault = self.vault()?;
-                Ok(json!(git::blame(vault.root(), git_path(vault, &p.path)?)))
-            }
-            "review.list" => {
-                let (dir, vault) = self.review()?;
-                Ok(json!(review::list(dir, vault.root())?))
-            }
-            "review.base" => {
-                let p: PathParam = parse(name, params)?;
-                let (dir, vault) = self.review()?;
-                Ok(json!({ "content": review::base(dir, vault.root(), git_path(vault, &p.path)?)? }))
-            }
-            "review.accept" => {
-                let p: AcceptParams = parse(name, params)?;
-                let (dir, vault) = self.review()?;
-                let path = p.path.as_deref().map(|path| git_path(vault, path)).transpose()?;
-                review::accept(dir, vault.root(), path)?;
-                Ok(Value::Null)
-            }
-            "review.saved" => {
-                let p: SavedParams = parse(name, params)?;
-                let (dir, vault) = self.review()?;
-                review::saved(dir, vault.root(), git_path(vault, &p.path)?, &p.before, &p.after)?;
-                Ok(Value::Null)
-            }
+            // They need the vault's folder and the state folder and nothing else of the core, so a
+            // host that shares the core runs them as `Core::outside` and `Outside::run`, without holding it.
+            name if Outside::has(name) => self.outside()?.run(name, params),
             "claims.list" => {
                 let dir = self.state_dir.clone().ok_or(Error::NoStateFolder)?;
                 let (vault, index) = self.fresh()?;
@@ -453,11 +498,6 @@ impl Core {
             }
             _ => Err(Error::UnknownCall(name.to_string())),
         }
-    }
-
-    /// What the `review.*` operations work on: the state folder and the open vault.
-    fn review(&self) -> Result<(&Path, &Vault), Error> {
-        Ok((self.state_dir.as_deref().ok_or(Error::NoStateFolder)?, self.vault()?))
     }
 
     fn vault(&self) -> Result<&Vault, Error> {
@@ -618,6 +658,42 @@ mod tests {
         let result = core.call("note.rename", json!({ "from": "New.md", "to": "Renamed.md" })).unwrap();
         assert_eq!(result, json!({ "updated": ["Home.md"] }));
         assert_eq!(fs::read_to_string(root.join("Home.md")).unwrap(), "home [[Renamed]]\n");
+    }
+
+    #[test]
+    fn a_rename_rewrites_the_links_of_every_note_however_many_link_to_it() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("Hub.md"), "# Hub\nsee [[Hub#Top]]\n").unwrap();
+        fs::write(dir.path().join("Other.md"), "other\n").unwrap();
+        // More notes than are written at once, in several folders, each with its own text around its links.
+        let count = 150;
+        let path = |n: usize| format!("f{}/n{n:03}.md", n % 6);
+        let text = |n: usize, to: &str| match n % 5 {
+            // Not a link to the hub: the note is left alone.
+            0 => format!("note {n} about [[Other]] and Hub\n"),
+            1 => format!("note {n}\n- [ ] read [[{to}|the hub]] twice: [[{to}#Top]]\n{}", "filler line\n".repeat(n)),
+            _ => format!("note {n} links to [[{to}]] and [[Other]]\n"),
+        };
+        for n in 0..count {
+            fs::create_dir_all(dir.path().join(path(n)).parent().unwrap()).unwrap();
+            fs::write(dir.path().join(path(n)), text(n, "Hub")).unwrap();
+        }
+        let mut core = Core::new();
+        core.call("vault.open", json!({ "path": dir.path() })).unwrap();
+        let out = core.call("note.rename", json!({ "from": "Hub.md", "to": "f1/Nexus.md" })).unwrap();
+        let mut linking: Vec<String> = (0..count).filter(|n| n % 5 != 0).map(path).collect();
+        linking.sort();
+        assert_eq!(out["updated"], json!(linking));
+        for n in 0..count {
+            assert_eq!(fs::read_to_string(dir.path().join(path(n))).unwrap(), text(n, "Nexus"), "{}", path(n));
+        }
+        assert_eq!(fs::read_to_string(dir.path().join("f1/Nexus.md")).unwrap(), "# Hub\nsee [[Nexus#Top]]\n");
+        assert_eq!(core.call("note.backlinks", json!({ "path": "f1/Nexus.md" })).unwrap().as_array().unwrap().len(), count - count / 5);
+        // And back, to a name in another folder than most of the notes are in.
+        core.call("note.rename", json!({ "from": "f1/Nexus.md", "to": "Hub.md" })).unwrap();
+        for n in 0..count {
+            assert_eq!(fs::read_to_string(dir.path().join(path(n))).unwrap(), text(n, "Hub"), "{}", path(n));
+        }
     }
 
     #[test]
@@ -1575,6 +1651,35 @@ mod tests {
         core.call("vault.open", json!({ "path": dir.path() })).unwrap();
         core.call("note.delete", json!({ "path": "a.md", "own": true })).unwrap();
         assert!(!state.path().join("review").exists());
+    }
+
+    #[test]
+    fn the_git_and_review_operations_run_without_the_core() {
+        assert!(matches!(Core::new().outside(), Err(Error::NoVault)));
+        for name in ["git.log", "git.show", "git.blame", "review.list", "review.base", "review.accept", "review.saved"] {
+            assert!(Outside::has(name), "{name}");
+        }
+        for name in ["note.read", "note.write", "vault.health", "claims.check", "search"] {
+            assert!(!Outside::has(name), "{name}");
+        }
+        if std::process::Command::new("git").arg("--version").output().is_err() {
+            return;
+        }
+        let (dir, _state, mut core) = review_vault(&[("a.md", "one\n")]);
+        fs::write(dir.path().join("a.md"), "one\ntwo\n").unwrap();
+        let outside = core.outside().unwrap();
+        let through_core = ["git.log", "git.blame", "review.list"].map(|name| core.call(name, json!({ "path": "a.md" })).unwrap());
+        // The core is gone, as it is let go of by a host: what was taken out of it is enough.
+        drop(core);
+        assert_eq!(["git.log", "git.blame", "review.list"].map(|name| outside.run(name, json!({ "path": "a.md" })).unwrap()), through_core);
+        assert_eq!(outside.run("review.list", Value::Null).unwrap()["entries"][0]["path"], "a.md");
+        assert_eq!(outside.run("git.show", json!({ "path": "a.md" })).unwrap(), json!({ "content": "one\n" }));
+        outside.run("review.accept", json!({ "path": "a.md" })).unwrap();
+        assert_eq!(outside.run("review.list", Value::Null).unwrap()["entries"], json!([]));
+        // The same checks as through the core: a dot path, and an operation that is not one of these.
+        assert!(matches!(outside.run("git.log", json!({ "path": ".git/config" })), Err(Error::BadPath(_))));
+        assert!(matches!(outside.run("note.read", json!({ "path": "a.md" })), Err(Error::UnknownCall(_))));
+        assert!(matches!(outside.run("git.push", Value::Null), Err(Error::UnknownCall(_))));
     }
 
     #[test]

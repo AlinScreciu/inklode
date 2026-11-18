@@ -3,7 +3,7 @@
 
 use std::sync::Mutex;
 
-use inklode_core::Core;
+use inklode_core::{Core, Outside};
 use rmcp::model::{CallToolResult, ContentBlock, Tool};
 use serde_json::{Value, json};
 
@@ -186,6 +186,10 @@ pub fn call(core: &Mutex<Core>, name: &str, mut params: Value) -> Option<CallToo
     let result = if def.call == "vault.health" {
         let check = core.lock().unwrap().health_check();
         check.map(|check| json!(check.run()))
+    } else if Outside::has(def.call) {
+        // The same for the tools that read git (`git_*`, `review_list`): what they need is taken out of the core first.
+        let outside = core.lock().unwrap().outside();
+        outside.and_then(|outside| outside.run(def.call, params))
     } else {
         core.lock().unwrap().call(def.call, params)
     };
@@ -243,5 +247,9 @@ mod tests {
         let waiting: Value = serde_json::from_str(&text("review_list", json!({}))).unwrap();
         assert_eq!(waiting["entries"][0]["path"], "a.md");
         assert_eq!(waiting["entries"][0]["status"], "deleted");
+        // The tools that read git run on what they take out of the core, and give what the core gives.
+        let log: Value = serde_json::from_str(&text("git_log", json!({ "path": "a.md" }))).unwrap();
+        assert_eq!(log, core.lock().unwrap().call("git.log", json!({ "path": "a.md" })).unwrap());
+        assert_eq!(log[0]["subject"], "first");
     }
 }
