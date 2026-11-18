@@ -12,7 +12,7 @@ import { modules, type ViewFactory, type ViewHandle } from "../modules";
 import type { Issue } from "../saves";
 import * as W from "../workspace";
 import { Editor, type EditorHandle, type EditorPosition, type Heading } from "./Editor";
-import { Backlinks } from "./Hits";
+import { Backlinks, useBacklinks } from "./Hits";
 import { Menu, type MenuAt } from "./Menu";
 import { CommandButton, EmptyPane, PaneHeader, paneActions, StatusBar } from "./Shell";
 
@@ -299,6 +299,17 @@ function Attachment({ path, vaultRoot }: { path: string; vaultRoot: string }) {
   );
 }
 
+/** Under a note: its backlinks, folded until asked for, and the status bar. One reading of the backlinks serves both. */
+function Footer({ path, refresh, counts, mode, onOpen }: { path: string; refresh: number; counts: { words: number; characters: number } | null; mode: "source" | "live-preview" | null; onOpen: PaneHost["open"] }) {
+  const hits = useBacklinks(path, refresh);
+  return (
+    <>
+      <Backlinks path={path} hits={hits ?? []} onOpen={onOpen} />
+      <StatusBar backlinks={hits?.length ?? null} counts={counts} mode={mode} />
+    </>
+  );
+}
+
 /** One pane: its tabs, its header, and what its tab shows, which is a module's view, a note with its footer, a file that is not text, or the empty state. */
 export function Pane({ pane, active, canClose, size, disk, noText, issues, counts, vaultRoot, sourceDefault, jump, changes, moduleVersion, error, outline, host }: PaneProps) {
   const tab = W.shown(pane);
@@ -391,8 +402,7 @@ export function Pane({ pane, active, canClose, size, disk, noText, issues, count
                 onMove={onMove}
               />
             )}
-            <Backlinks path={path} refresh={changes} onOpen={host.open} />
-            <StatusBar path={path} refresh={changes} counts={custom ? null : (counts[path] ?? null)} mode={custom ? null : mode} />
+            <Footer path={path} refresh={changes} counts={custom ? null : (counts[path] ?? null)} mode={custom ? null : mode} onOpen={host.open} />
           </>
         )
       )}

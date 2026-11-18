@@ -64,23 +64,43 @@ const subscribe = (changed: () => void) => {
 commands.register([{ id: "backlinks.toggle", title: "Toggle backlinks", run: () => show(!unfolded) }]);
 
 /**
- * The lines in other notes that link to `path`. Hidden until the status bar's backlink count is
- * clicked or the command `backlinks.toggle` runs. `refresh` changes when the vault does.
+ * The lines in other notes that link to `path`, read from the core once for the note's whole footer: the
+ * list and the status bar's count. Read again when `refresh` changes, which it does when the vault does.
+ * Null until the first answer, and after a reading that failed.
  */
-export function Backlinks({ path, refresh, onOpen }: { path: string; refresh: number; onOpen: OnOpen }) {
-  const [hits, setHits] = useState<Hit[]>([]);
-  const open = useSyncExternalStore(subscribe, () => unfolded);
-
+export function useBacklinks(path: string, refresh: number): Hit[] | null {
+  const [hits, setHits] = useState<Hit[] | null>(null);
   useEffect(() => {
     let stale = false;
     call<Hit[]>("note.backlinks", { path }).then(
       (found) => stale || setHits(found),
-      (e) => commands.onError(e),
+      (e) => {
+        if (stale) return;
+        setHits(null);
+        commands.onError(e);
+      },
     );
     return () => {
       stale = true;
     };
   }, [path, refresh]);
+  return hits;
+}
+
+// What each backlinks list has, by its element, for `ui_state`: the rows are not in the page while the list is folded.
+const listed = new WeakMap<Element, Hit[]>();
+
+/** The backlinks of the footer at `el` (a `.backlinks` element), as `ui_state` gives them. */
+export const backlinksOf = (el: Element | null) => ((el && listed.get(el)) ?? []).map(({ path, line, text }) => ({ path, line, text: text.trim() }));
+
+/**
+ * The lines in other notes that link to `path` (`hits`, from `useBacklinks`). Hidden until the status bar's
+ * backlink count is clicked or the command `backlinks.toggle` runs. The rows are made only while it shows:
+ * a note that hundreds of notes link to would otherwise get hundreds of rows nobody sees, again at every save.
+ */
+export function Backlinks({ path, hits, onOpen }: { path: string; hits: Hit[]; onOpen: OnOpen }) {
+  const open = useSyncExternalStore(subscribe, () => unfolded);
+  const shown = open && hits.length > 0;
 
   // The links to this note in a line: `[[name]]`, with a folder before the name or `#heading` or `|alias` after it.
   // shortcut: a link written with one of the note's aliases is not highlighted; have the core return
@@ -89,8 +109,8 @@ export function Backlinks({ path, refresh, onOpen }: { path: string; refresh: nu
   const links = new RegExp(`(\\[\\[(?:[^\\]|#]*/)?${name}(?:\\.md)?(?:[#|][^\\]]*)?\\]\\])`, "gi");
 
   return (
-    <div className="backlinks" hidden={!open || hits.length === 0}>
-      <HitList hits={hits} mark={links} onOpen={onOpen} />
+    <div className="backlinks" hidden={!shown} ref={(el) => void (el && listed.set(el, hits))}>
+      {shown && <HitList hits={hits} mark={links} onOpen={onOpen} />}
     </div>
   );
 }

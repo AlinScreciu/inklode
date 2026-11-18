@@ -29,9 +29,8 @@ import {
   Waypoints,
   X,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { commands, keyLabel } from "../commands";
-import { call } from "../core/client";
 import type { RibbonButton } from "../modules";
 import { below, Keys, Menu, type Icon, type MenuAt, type MenuItem } from "./Menu";
 
@@ -239,28 +238,15 @@ export function countText(text: string) {
 }
 
 interface StatusBarProps {
-  path: string;
-  /** Changes when files in the vault changed, so the backlink count is read again. */
-  refresh: number;
+  /** How many lines in other notes link to the note (`useBacklinks` in Hits.tsx). Null while that is not known. */
+  backlinks: number | null;
   /** Null when the pane does not show text, e.g. a drawing. */
   counts: { words: number; characters: number } | null;
   mode: "source" | "live-preview" | null;
 }
 
 /** The quiet line under a pane: backlinks, words, characters and the editor's mode. */
-export function StatusBar({ path, refresh, counts, mode }: StatusBarProps) {
-  const [backlinks, setBacklinks] = useState<number | null>(null);
-  useEffect(() => {
-    let stale = false;
-    call<unknown[]>("note.backlinks", { path }).then(
-      (hits) => stale || setBacklinks(hits.length),
-      () => stale || setBacklinks(null),
-    );
-    return () => {
-      stale = true;
-    };
-  }, [path, refresh]);
-
+export function StatusBar({ backlinks, counts, mode }: StatusBarProps) {
   const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
   return (
     <footer className="status-bar">

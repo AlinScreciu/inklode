@@ -6,7 +6,7 @@ import { appearanceNow, applyOptions } from "./appearance";
 import { commands, keyOf } from "./commands";
 import type { EditorHandle, EditorPosition, Heading } from "./components/Editor";
 import { canMove, DRAWING, FileTree, folderPaths, foldersOf, notePaths, parentOf, type Entry } from "./components/FileTree";
-import { Search } from "./components/Hits";
+import { backlinksOf, Search } from "./components/Hits";
 import { Confirm, Menu, type MenuAt } from "./components/Menu";
 import { Palette } from "./components/Palette";
 import { Settings, SETTINGS_SECTIONS, type SettingsSection } from "./components/Settings";
@@ -1512,7 +1512,7 @@ export default function App() {
       // How far the file tree is scrolled, in pixels.
       treeScroll: document.querySelector(".sidebar-body")?.scrollTop ?? null,
       // Of the active pane's note. Every pane with a note has its own footer.
-      backlinks: hits(".pane.is-active .backlinks .hit"),
+      backlinks: backlinksOf(document.querySelector(".pane.is-active .backlinks")),
       // Whether the backlinks list shows (it starts hidden). Null when no note is open.
       backlinksOpen: ((el) => (el ? !el.hidden : null))(document.querySelector<HTMLElement>(".pane.is-active .backlinks")),
       searchResults: hits(".sidebar .hit"),
