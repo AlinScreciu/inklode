@@ -77,7 +77,8 @@ jobs:
 
           # The certificate's issuer, which the identity is not valid without and the .p12 does not carry.
           curl -fsS -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
-          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$KEYCHAIN"
+          # Fails with "already exists" when the .p12 brought the issuer along, which is as good.
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$KEYCHAIN" || true
 
           identity="$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -n 's/.*"\(Developer ID Application: .*\)".*/\1/p' | head -n 1)"
           if [ -z "$identity" ]; then
