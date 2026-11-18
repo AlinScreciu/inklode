@@ -1319,8 +1319,10 @@ mod tests {
             ("Linked.md", "text\n".to_string()),
             ("Alone.md", "No link here, and `[[code]]` is not one.\n".to_string()),
             ("sub/Broken.md", "one\nSee [[Missing]] and [[Hub]].\n```\n[[fenced]]\n```\n![[lost.png]] [[Missing#Part|alias]]\n".to_string()),
+            // A template has a broken link, no link from a note, `repos:` and no date, and is in no list.
+            ("sub/_templates/Task.md", "---\nrepos: [no-such-repo-anywhere]\nupdated:\n---\n[[Placeholder]]\n".to_string()),
         ];
-        fs::create_dir(dir.path().join("sub")).unwrap();
+        fs::create_dir_all(dir.path().join("sub/_templates")).unwrap();
         fs::write(dir.path().join("img.png"), [0u8]).unwrap();
         for (name, text) in &notes {
             fs::write(dir.path().join(name), text).unwrap();
@@ -1374,6 +1376,9 @@ mod tests {
         fs::write(dir.path().join("Plan.md"), text).unwrap();
         fs::write(dir.path().join("Done.md"), "- [x] all done\n").unwrap();
         fs::write(dir.path().join("Also.md"), "\n\n> quoted\n\n- [ ] one more\n").unwrap();
+        // A template's empty checkboxes are not tasks.
+        fs::create_dir(dir.path().join("_templates")).unwrap();
+        fs::write(dir.path().join("_templates/Task.md"), "- [ ] step\n").unwrap();
         let mut core = Core::new();
         core.call("vault.open", json!({ "path": dir.path() })).unwrap();
         let task = |line: usize, text: &str| json!({ "line": line, "text": text });

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+Fixed:
+
+- Vault health and the task list no longer report notes in a `_templates` folder.
+
 ## 0.2.0
 
 New:

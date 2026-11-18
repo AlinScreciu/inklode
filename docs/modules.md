@@ -176,6 +176,8 @@ The `health` module, off by default: `"modules": {"health": true}` in `.inklode/
   - Git is only read (`rev-parse`, `show-ref`, `log`), never written, and nothing is fetched.
 - Notes without links: no link to another note and none from one.
 
+Notes in a folder named `_templates`, at any depth, are in none of the three lists: a template's placeholder links and empty `updated:` are not faults.
+
 The ribbon button carries the number of broken links plus stale notes. The list is read again:
 
 - three seconds after the files of the vault last changed, so a row of saves is one reading, and the panel and the count are that much behind a change;
@@ -195,6 +197,7 @@ The `tasks` module, off by default: `"modules": {"tasks": true}` in `.inklode/se
 - A click on a task's text opens its note at that line.
 - A click on its checkbox ticks it in the note (`[ ]` becomes `[x]`, nothing else changes). When the note is open as text this is an edit in its editor, which Undo takes back and which is saved like typing; else the file is written with the text just read as `base`, so the core refuses the write if the file changed in between.
 - The list is read again when files of the vault change.
+- Notes in a folder named `_templates`, at any depth, are left out: a template's checkboxes are not tasks.
 
 | Command | What |
 |---|---|

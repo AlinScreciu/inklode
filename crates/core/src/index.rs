@@ -439,7 +439,7 @@ impl Index {
     }
 
     /// The open checkboxes (`- [ ]`) outside fenced code blocks, grouped by note, by
-    /// path then line. Notes without one are left out.
+    /// path then line. Notes without one are left out, and so are templates.
     pub fn tasks(&self) -> Vec<NoteTasks> {
         let of = |note: &Note| {
             let tasks: Vec<Task> = unfenced(&note.content)
@@ -447,7 +447,7 @@ impl Index {
                 .collect();
             (!tasks.is_empty()).then(|| NoteTasks { path: note.path.clone(), tasks })
         };
-        self.notes.iter().filter_map(of).collect()
+        self.notes.iter().filter(|note| !is_template(&note.path)).filter_map(of).collect()
     }
 
     /// Every note as `(path, text)`, sorted by path.
@@ -549,6 +549,15 @@ pub(crate) fn unfenced(content: &str) -> impl Iterator<Item = (usize, usize, &st
         }
         (!in_fence).then_some((i + 1, start, line))
     })
+}
+
+/// Whether a note is a template: it is in a folder named `_templates`, at any depth. Its
+/// placeholder links, empty checkboxes and `updated:` are not things to look after, so the
+/// health report and the task list leave it out.
+// shortcut: the folder's name is fixed; make it a vault setting when someone keeps
+// templates under another name.
+pub(crate) fn is_template(path: &str) -> bool {
+    path.rsplit('/').skip(1).any(|folder| folder == "_templates")
 }
 
 /// Finds the wikilinks in a note, skipping fenced code blocks and inline code.

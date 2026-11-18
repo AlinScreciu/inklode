@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use serde::Serialize;
 
 use crate::git::git;
-use crate::index::{Broken, Index};
+use crate::index::{is_template, Broken, Index};
 
 /// Files at a repository's root that say how the repository is kept, not what the code
 /// does: a commit that changes only these makes no note stale.
@@ -120,10 +120,13 @@ pub struct HealthCheck {
 /// The part of the report that comes from the index, and what the stale check will read.
 /// `cache` has the commits earlier reports read.
 pub(crate) fn check(index: &Index, roots: Vec<PathBuf>, cache: Cache) -> HealthCheck {
-    let orphans = index.graph().nodes.into_iter().filter(|node| node.links == 0).map(|node| node.path).collect();
-    let notes = index.texts().map(|(path, text)| (path, meta(text))).filter(|(_, (repos, _))| !repos.is_empty());
+    // Templates are left out of all three lists.
+    let kept = |path: &str| !is_template(path);
+    let broken = index.broken().into_iter().filter(|note| kept(&note.path)).collect();
+    let orphans = index.graph().nodes.into_iter().filter(|node| node.links == 0 && kept(&node.path)).map(|node| node.path).collect();
+    let notes = index.texts().filter(|(path, _)| kept(path)).map(|(path, text)| (path, meta(text))).filter(|(_, (repos, _))| !repos.is_empty());
     let notes = notes.map(|(path, (repos, updated))| (path.to_string(), repos, updated)).collect();
-    HealthCheck { broken: index.broken(), orphans, notes, roots, cache }
+    HealthCheck { broken, orphans, notes, roots, cache }
 }
 
 /// Which commits of a repository an entry counts.
