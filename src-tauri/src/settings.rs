@@ -55,6 +55,19 @@ fn write(path: &Path, settings: &Value) -> Result<(), String> {
     fs::rename(&tmp, path).map_err(failed)
 }
 
+/// Held across the read and the write of one change to the settings file. The commands that change it are
+/// async and can run at the same time: without this, two of them share the temporary file, so the second
+/// rename fails with "No such file or directory", and the later write undoes the earlier one.
+static CHANGING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Reads the settings file, applies `with` and writes the result, as one step. Returns what was written.
+fn change(path: &Path, with: impl FnOnce(Value) -> Value) -> Result<Value, String> {
+    let _one_at_a_time = CHANGING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let stored = with(read(path)?);
+    write(path, &stored)?;
+    Ok(stored)
+}
+
 /// `(enabled, port)` of the MCP server in the settings, with the default for a
 /// key that is missing or unusable.
 fn mcp_of(settings: &Value) -> (bool, u16) {
@@ -236,14 +249,16 @@ pub async fn app_settings_set(window: tauri::WebviewWindow, app: AppHandle, sett
         _ => return Err("capture.hotkey must be text".into()),
     };
     let path = file(&app)?;
-    let mut stored = with_mcp(read(&path)?, enabled, port);
-    if let Some(hotkey) = hotkey {
-        if !stored["capture"].is_object() {
-            stored["capture"] = json!({});
+    change(&path, |settings| {
+        let mut stored = with_mcp(settings, enabled, port);
+        if let Some(hotkey) = hotkey {
+            if !stored["capture"].is_object() {
+                stored["capture"] = json!({});
+            }
+            stored["capture"]["hotkey"] = json!(hotkey);
         }
-        stored["capture"]["hotkey"] = json!(hotkey);
-    }
-    write(&path, &stored)?;
+        stored
+    })?;
     // Before the answer is made, so it says whether the new hotkey is registered.
     capture::apply(&app).await;
     Ok(apply(&app).await)
@@ -258,8 +273,7 @@ pub async fn capture_set(window: tauri::WebviewWindow, app: AppHandle, on: bool)
     let root = open_root(&app).ok_or("no vault is open")?;
     let root = root.to_str().ok_or("the vault's path is not valid UTF-8")?;
     let path = file(&app)?;
-    let stored = with_capture(read(&path)?, root, on);
-    write(&path, &stored)?;
+    let stored = change(&path, |settings| with_capture(settings, root, on))?;
     capture::apply(&app).await;
     let state = app.state::<McpState>();
     let state = state.0.lock().await;
@@ -289,8 +303,7 @@ pub async fn claims_trust(window: tauri::WebviewWindow, app: AppHandle, trusted:
         }
     }
     let path = file(&app)?;
-    let stored = with_trust(read(&path)?, root, trusted);
-    write(&path, &stored)?;
+    let stored = change(&path, |settings| with_trust(settings, root, trusted))?;
     let state = app.state::<McpState>();
     let state = state.0.lock().await;
     Ok(report(&app, &stored, &state.0, &state.1))
@@ -316,8 +329,7 @@ fn with_updates_auto(mut settings: Value, auto: bool) -> Value {
 pub async fn updates_set(window: tauri::WebviewWindow, app: AppHandle, auto: bool) -> Result<Value, String> {
     crate::main_only(&window)?;
     let path = file(&app)?;
-    let stored = with_updates_auto(read(&path)?, auto);
-    write(&path, &stored)?;
+    let stored = change(&path, |settings| with_updates_auto(settings, auto))?;
     let state = app.state::<McpState>();
     let state = state.0.lock().await;
     Ok(report(&app, &stored, &state.0, &state.1))
@@ -326,6 +338,31 @@ pub async fn updates_set(window: tauri::WebviewWindow, app: AppHandle, auto: boo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn changes_at_the_same_time_all_land() {
+        let dir = std::env::temp_dir().join(format!("inklode-settings-{}", std::process::id()));
+        let path = dir.join("settings.json");
+        let saves: Vec<_> = (0..16)
+            .map(|n| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    change(&path, |mut settings| {
+                        settings[format!("key{n}")] = json!(n);
+                        settings
+                    })
+                })
+            })
+            .collect();
+        for save in saves {
+            save.join().unwrap().unwrap();
+        }
+        let stored = read(&path).unwrap();
+        for n in 0..16 {
+            assert_eq!(stored[format!("key{n}")], json!(n));
+        }
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn checking_for_updates_at_start_is_on_unless_switched_off() {
