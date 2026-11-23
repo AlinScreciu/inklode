@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+New:
+
+- Built-in theme Things, a port of the Obsidian theme, light and dark.
+
 Fixed:
 
+- Selected text keeps its own colour: links and other text in the accent were hard to read under the selection.
 - Vault health and the task list no longer report notes in a `_templates` folder.
 
 ## 0.2.0

@@ -13,7 +13,7 @@ The app's own settings are not in a vault: the MCP server's switch and port, the
 
 A missing file or key means the default. Keys the app does not know are kept when it writes a file. If a JSON file does not parse, the app says so, keeps using the last good content and does not write to the file until it is fixed.
 
-Themes and snippets are plain CSS, loaded after the app's own. The variables at the top of `src/app.css` and the class names in that file are the interface they can rely on; [themes.md](themes.md) lists them. The app also ships themes of its own (`src/themes/`: Catppuccin, Catppuccin Frappé, Catppuccin Macchiato, Minimal), which show in the same list as the vault's.
+Themes and snippets are plain CSS, loaded after the app's own. The variables at the top of `src/app.css` and the class names in that file are the interface they can rely on; [themes.md](themes.md) lists them. The app also ships themes of its own (`src/themes/`: Catppuccin, Catppuccin Frappé, Catppuccin Macchiato, Minimal, Things), which show in the same list as the vault's.
 
 Light or dark is `data-appearance="light"` or `"dark"` on `<html>`, from the appearance setting ("system", "light" or "dark"), never `@media (prefers-color-scheme)`. One theme file covers both:
 

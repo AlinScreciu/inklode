@@ -159,4 +159,4 @@ Known limits of this version:
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). Notices for the work Inklode ships or derives from (Lucide icons, the Catppuccin and Minimal themes) and for the file formats it reads (the Obsidian Excalidraw plugin's, whose code is not used) are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+MIT, see [LICENSE](LICENSE). Notices for the work Inklode ships or derives from (Lucide icons, the Catppuccin, Minimal and Things themes) and for the file formats it reads (the Obsidian Excalidraw plugin's, whose code is not used) are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

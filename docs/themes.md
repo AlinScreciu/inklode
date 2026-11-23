@@ -15,7 +15,7 @@ A theme is one CSS file that sets Inklode's CSS variables. It is added to the pa
 - `theme.set {name: null}` goes back to the app's default look.
 - The code is in `src/config.ts` (`BUILTIN_THEMES`, `loadConfig`, `setTheme`).
 
-Built-in now: `Catppuccin` (Latte in light, Mocha in dark), `Catppuccin Frappé`, `Catppuccin Macchiato` (both dark only), `Minimal`.
+Built-in now: `Catppuccin` (Latte in light, Mocha in dark), `Catppuccin Frappé`, `Catppuccin Macchiato` (both dark only), `Minimal`, `Things`.
 
 ## Light and dark
 
@@ -139,7 +139,8 @@ The strip of tabs is on the sidebar's layer and the tab that shows is on the not
 | Variable | Default | What it is |
 |---|---|---|
 | `--editor-padding` | `clamp(20px, 5vw, 48px)` | Space left and right of the text column. |
-| `--selection-bg` | 28% accent | Selected text. Keep it translucent: the selection is drawn over the text. |
+| `--selection-bg` | 28% accent | Selected text. The selection is drawn over the text, so keep it translucent or dim enough to be blended. |
+| `--selection-blend` | `darken`, `lighten` in dark | How the selection mixes with the text under it (`mix-blend-mode`). With `darken` on a light surface and `lighten` on a dark one, only the background changes and text of any colour keeps its own. A theme that is dark in both appearances sets `lighten` in both. |
 | `--caret-color` | `→ accent` | The text cursor. |
 | `--scrollbar-thumb` | 35% muted | Scrollbar thumb. |
 | `--scrollbar-thumb-hover` | 60% muted | Scrollbar thumb under the pointer. |
@@ -305,10 +306,10 @@ Porting is mapping the theme's palette and type choices onto the variables above
 1. Read the theme's licence. If it allows reuse (MIT does, with the notice kept), start the file with a comment that has the copyright line, the licence name, the source URL and the words "port to Inklode", and add the full licence text to `THIRD-PARTY-NOTICES.md`. `pnpm test:themes` checks the comment.
 2. Find the theme's palette for `.theme-light` and `.theme-dark`. Write it as private variables with a prefix of your own (`--ctp-*`, `--min-*`), light in `:root`, dark in `:root[data-appearance="dark"]`. Work out formulas (`hsl(calc(...))`) to plain values for the base colours, so the contrast check can read them.
 3. Find what the theme sets each Obsidian variable to, and write the mapping once, in `:root[data-appearance]`, using the table below. Where the theme leaves an Obsidian variable alone, Obsidian's default applies; most of those match Inklode's derived defaults, so leave them out.
-4. Add rules against class names only for a trait the theme is known for and no variable covers (Catppuccin's coloured bold and italic, Minimal's heading weights and small caps).
+4. Add rules against class names only for a trait the theme is known for and no variable covers (Catppuccin's coloured bold and italic, Minimal's heading weights and small caps, Things' heading colours and underlined second-level headings).
 5. Run `pnpm test:themes`, then look at it in the app in both appearances: a note with every kind of block, the sidebar, the palette, Settings, the graph. The usual failures are surfaces layered the wrong way round and faint text that cannot be read. Where the original is too faint to read, prefer `--text-faint` or `--text-muted` and say so in a comment.
 
-The mapping used for Catppuccin and Minimal:
+The mapping used for Catppuccin, Minimal and Things:
 
 | Obsidian | Inklode |
 |---|---|

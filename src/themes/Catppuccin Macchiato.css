@@ -15,6 +15,7 @@
  */
 :root[data-appearance] {
   color-scheme: dark;
+  --selection-blend: lighten;
   --ctp-rosewater: #f4dbd6;
   --ctp-pink: #f5bde6;
   --ctp-maroon: #ee99a0;

@@ -102,6 +102,9 @@
   /* Space left and right of the text column, which matters when the pane is narrower than `--line-width`. */
   --editor-padding: clamp(20px, 5vw, 48px);
   --selection-bg: color-mix(in srgb, var(--accent) 28%, transparent);
+  /* How the selection, which lies over the text, mixes with what is under it: `darken` on a light surface,
+     `lighten` on a dark one. Either way only the background changes colour and the text keeps its own. */
+  --selection-blend: darken;
   --caret-color: var(--accent);
   --scrollbar-thumb: color-mix(in srgb, var(--text-muted) 35%, transparent);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--text-muted) 60%, transparent);
@@ -250,6 +253,7 @@
   --tooltip-bg: #3b3d45;
   --tooltip-text: var(--text);
   --syntax-code: #7cc4ba;
+  --selection-blend: lighten;
 }
 
 * {
@@ -1404,10 +1408,12 @@ kbd {
 }
 
 /* CodeMirror draws the selection in a layer under the text, where a line with a background of its own (code)
-   covers it, and as wide as the pane. Here the layer is above the text, which a translucent `--selection-bg`
-   lets through, and is cut to the text column: `--editor-padding` in from the sides of the centred content. */
+   covers it, and as wide as the pane. Here the layer is above the text and is cut to the text column:
+   `--editor-padding` in from the sides of the centred content. Laid plainly over the text, the tint washed
+   out text of its own hue (links, tags in the accent); `--selection-blend` mixes it so the text stays as it is. */
 .editor .cm-scroller > .cm-selectionLayer {
   z-index: 1 !important;
+  mix-blend-mode: var(--selection-blend);
   width: 100%;
   pointer-events: none;
   clip-path: inset(

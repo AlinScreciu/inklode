@@ -1,0 +1,182 @@
+/*
+ * Things for Inklode: the Things colour scheme, light and dark, with its coloured headings, pink bold and
+ * italic, green quotes, tag pills and One Dark / One Light code colours.
+ *
+ * A port to Inklode's variables of Things for Obsidian by Colin Eckert (@colineckert),
+ * https://github.com/colineckert/obsidian-things. No rule of the original stylesheet is copied.
+ *
+ * MIT License. Copyright (c) 2020-2021 Stephan Ango (@kepano), as in the theme's LICENSE file.
+ * The full licence text is in THIRD-PARTY-NOTICES.md at the root of the Inklode repository.
+ */
+
+/*
+ * Things sets Obsidian's base greys (`--color-base-*`) and derives its muted text and accent from
+ * hsl(212, 15%, ...) and hsl(215, 75%, 60%). The values below are those worked out. Where Things leaves an
+ * Obsidian variable alone, Obsidian's default is used: primary surface base-00, sidebar base-20,
+ * borders base-30, text base-100.
+ */
+:root {
+  --things-bg: #ffffff;
+  --things-bg-sidebar: #f6f7f8;
+  --things-border: #ebedf0;
+  --things-text: #222222;
+  --things-muted: #555e68;
+  --things-formatted: #949da8;
+  --things-faint: #a2aab3;
+  --things-link: #4c8ce6;
+  --things-red: #e4374b;
+  --things-hover: rgb(55 75 105 / 0.14);
+  --things-active: rgb(55 75 105 / 0.2);
+  --things-tooltip: #222222;
+  --things-tooltip-text: #ffffff;
+  --things-tag-bg: #bde1d3;
+  --things-tag-text: #1d694b;
+  --things-code-inline: #eceef1;
+  --things-code-block: #f0f2f5;
+  /* Code colours, from One Light as Things lists them. */
+  --things-keyword: #a625a4;
+  --things-string: #4ea24c;
+  --things-number: #986800;
+  --things-type: #e35649;
+  --things-function: #3d74f6;
+  --things-property: #e75545;
+  --things-comment: var(--things-muted);
+  --things-punctuation: #383a42;
+}
+
+:root[data-appearance="dark"] {
+  --things-bg: #1c2127;
+  --things-bg-sidebar: #181c20;
+  --things-border: #35393e;
+  --things-text: #dadada;
+  --things-muted: #bec6cf;
+  --things-formatted: #92a0af;
+  --things-faint: #5d6d7e;
+  --things-link: #79a9ec;
+  --things-red: #fb464c;
+  --things-hover: rgb(255 255 255 / 0.067);
+  --things-active: rgb(255 255 255 / 0.11);
+  --things-tooltip: #2c313c;
+  --things-tooltip-text: #dadada;
+  --things-tag-bg: #1d694b;
+  --things-tag-text: #ffffff;
+  --things-code-inline: #303540;
+  --things-code-block: #282c34;
+  /* One Dark. */
+  --things-keyword: #c678dd;
+  --things-string: #98c379;
+  --things-number: #d19a66;
+  --things-type: #e5c07b;
+  --things-function: #61afef;
+  --things-property: #e06c75;
+  --things-comment: #5c6370;
+  --things-punctuation: #abb2bf;
+}
+
+/* `:root[data-appearance]`, because plain `:root` loses to the app's own dark values. */
+:root[data-appearance] {
+  /* The theme's own colours, the same in both appearances. */
+  --things-blue: #2e80f2;
+  --things-pink: #ff82b2;
+  --things-green: #3eb4bf;
+  --things-yellow: #e5b567;
+  --things-heading-red: #e83e3e;
+
+  --font-mono: "JetBrains Mono", "Fira Code", Menlo, SFMono-Regular, Consolas, "Roboto Mono", monospace;
+  --line-height-text: 1.5;
+  --radius: 8px;
+  --radius-s: 4px;
+  --radius-l: 10px;
+
+  --bg: var(--things-bg);
+  --bg-sidebar: var(--things-bg-sidebar);
+  --bg-ribbon: var(--things-bg-sidebar);
+  --bg-elevated: var(--things-bg);
+  --bg-hover: var(--things-hover);
+  --bg-active: var(--things-active);
+  --border: var(--things-border);
+  --text: var(--things-text);
+  --text-muted: var(--things-muted);
+  --text-faint: var(--things-faint);
+  --accent: #4c8ce6;
+  --accent-text: #ffffff;
+  --error: var(--things-red);
+  --tooltip-bg: var(--things-tooltip);
+  --tooltip-text: var(--things-tooltip-text);
+
+  --syntax-heading: var(--text);
+  --syntax-link: var(--things-link);
+  --syntax-code: var(--text);
+  --syntax-quote: var(--things-green);
+  --syntax-meta: var(--things-formatted);
+  --syntax-keyword: var(--things-keyword);
+  --syntax-string: var(--things-string);
+  --syntax-number: var(--things-number);
+  --syntax-type: var(--things-type);
+  --syntax-function: var(--things-function);
+  --syntax-property: var(--things-property);
+  --syntax-comment: var(--things-comment);
+  --syntax-punctuation: var(--things-punctuation);
+
+  --selection-bg: color-mix(in srgb, var(--accent) 25%, transparent);
+  --heading-1-size: 1.7em;
+  --heading-2-size: 1.5em;
+  --heading-3-size: 1.2em;
+  --heading-4-size: 1.1em;
+  --heading-5-size: 1em;
+  --heading-6-size: 0.9em;
+  --props-tag-bg: var(--things-tag-bg);
+  --props-tag-text: var(--things-tag-text);
+  --code-bg: var(--things-code-block);
+  --blockquote-bar: var(--accent);
+  --blockquote-bar-width: 2px;
+  --bullet-color: var(--things-faint);
+  --list-number-text: var(--things-faint);
+  --checkbox-color: var(--accent);
+  --task-done-text: var(--things-faint);
+  --hit-mark-bg: rgb(255 208 0 / 0.4);
+}
+
+/* Headings 3 to 5 in their own colours; 1 and 2 in the text colour, 6 muted (the app's default). */
+.md-heading-3 .tok-heading {
+  color: var(--things-blue);
+}
+
+.md-heading-4 .tok-heading {
+  color: var(--things-yellow);
+}
+
+.md-heading-5 .tok-heading {
+  color: var(--things-heading-red);
+}
+
+/* The line under a second-level heading. */
+.editor .md-heading-2 {
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 2px;
+}
+
+/* Bold and italic in pink, quotes in italic. */
+.tok-strong,
+.tok-emphasis {
+  color: var(--things-pink);
+}
+
+.editor .cm-line.md-blockquote {
+  font-style: italic;
+}
+
+/* Inline code has a background of its own, a shade off the code block's. */
+.editor .md-inline-code {
+  background: var(--things-code-inline);
+}
+
+.md-task-checkbox {
+  border-radius: 30%;
+}
+
+/* Images as cards. */
+.md-image {
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.24);
+}
