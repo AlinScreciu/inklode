@@ -1402,9 +1402,10 @@ kbd {
   border-left: 1.5px solid var(--caret-color);
 }
 
-.editor .cm-selectionBackground,
-.editor .cm-focused .cm-selectionBackground {
-  background: var(--selection-bg);
+/* `!important`: CodeMirror's own rule for a focused editor (`&light.cm-focused > .cm-scroller > .cm-selectionLayer
+   .cm-selectionBackground`, an opaque #d7d4f0) is more specific, and with the layer above the text it hid the text. */
+.editor .cm-selectionBackground {
+  background: var(--selection-bg) !important;
 }
 
 /* CodeMirror draws the selection in a layer under the text, where a line with a background of its own (code)
