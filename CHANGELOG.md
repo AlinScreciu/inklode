@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+Fixed:
+
+- Selected text in a note can be read again. While the editor had the focus, CodeMirror's own selection colour, an opaque lavender, was drawn over the text and hid it; 0.3.0 did not fix this.
+
 ## 0.3.0
 
 New:
