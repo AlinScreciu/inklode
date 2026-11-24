@@ -175,6 +175,16 @@ The strip of tabs is on the sidebar's layer and the tab that shows is on the not
 | `--blockquote-bar-width` | `3px` | Its width. |
 | `--blockquote-indent` | `16px` | Space between bar and text. |
 | `--blockquote-text` | `→ syntax-quote` | Quoted text. |
+| `--callout-note`, `--callout-info`, `--callout-todo` | blue, 75% `#086ddd` in text | Colour of a callout of that type (`> [!note]`): its title, icon and the tint of its box. The defaults are Obsidian's hues mixed with `--text`, so they follow a theme's text and need not be set. `info` and `todo` are `→ callout-note`. |
+| `--callout-abstract`, `--callout-tip` | cyan, 75% `#00bfbc` in text | The same; `summary` and `tldr` are abstract, `hint` and `important` are tip. `tip` is `→ callout-abstract`. |
+| `--callout-success` | green, 75% `#08b94e` in text | The same; also `check` and `done`. |
+| `--callout-question`, `--callout-warning` | orange, 75% `#ec7500` in text | The same; `help` and `faq` are question, `caution` and `attention` are warning. `warning` is `→ callout-question`. |
+| `--callout-failure`, `--callout-danger`, `--callout-bug` | red, 75% `#e93147` in text | The same; `fail` and `missing` are failure, `error` is danger. `danger` and `bug` are `→ callout-failure`. |
+| `--callout-example` | purple, 75% `#7852ee` in text | The same. |
+| `--callout-quote` | grey, 75% `#9e9e9e` in text | The same; also `cite`. |
+| `--callout-tint` | `10%`, `14%` in dark | How much of the callout's colour is in its box's background. |
+| `--callout-padding` | `14px` | Space inside a callout's box, left and right; 0.6 of it over the title and under the last line. |
+| `--callout-title-weight` | `600` | Weight of a callout's title. |
 | `--rule-color` | `→ border` | Horizontal rules. |
 | `--bullet-color` | `→ text-muted` | List bullets. |
 | `--bullet-size` | `0.36em` | Diameter of a bullet. |
@@ -268,11 +278,12 @@ Where a variable cannot say it, a theme or snippet may add a rule against a clas
 | Class | On |
 |---|---|
 | `tok-heading`, `tok-strong`, `tok-emphasis`, `tok-strikethrough`, `tok-link`, `tok-url`, `tok-monospace`, `tok-quote`, `tok-meta`, `tok-punctuation` | Spans of Markdown syntax, in both editor modes (CodeMirror's class highlighter). |
-| `is-live-preview`, `is-source` | The editor's root, by mode. |
+| `is-live-preview`, `is-source`, `is-reading` | The editor's root, by mode. The reading view has `is-live-preview` as well, so rules for Live Preview apply to it too. |
 | `md-heading`, `md-heading-1` … `md-heading-6` | A heading line in Live Preview. Source mode has no `md-*` classes. |
 | `md-link`, `md-wikilink`, `md-external-link`, `is-unresolved` | A rendered link. `data-link` holds its target. |
 | `md-inline-code`, `md-codeblock`, `md-codeblock-fence`, `md-codeblock-tools`, `md-codeblock-lang`, `md-codeblock-copy` | Code; the last three are the block's corner with the language and the Copy button. |
 | `md-blockquote`, `md-hr` | Quote lines and rules. |
+| `md-callout`, `md-callout-note` … `md-callout-quote`, `md-callout-title` (`is-foldable`, `is-folded`, `is-raw`), `md-callout-end`, `md-callout-head`, `md-callout-icon`, `md-callout-fold` | A callout's lines, by look; its first line (`is-raw` while its markup shows) and last shown line; the icon with the type's name when there is no title; the fold mark. `data-callout` on each line is the type as written, and `--callout-color` is the colour in use, so a snippet can colour a type of its own: `.md-callout[data-callout="recipe"] { --callout-color: #b5651d; }`. |
 | `md-list-line`, `md-list-bullet`, `md-list-number`, `md-task`, `md-task-checkbox`, `md-task-done` | Lists and tasks. `--list-depth` is set on a list line. |
 | `md-frontmatter`, `md-frontmatter-source`, `md-props`, `md-props-row`, `md-props-key`, `md-props-values`, `md-props-value`, `md-props-pill`, `md-props-tags` | Frontmatter as YAML (`md-frontmatter-source` while the cursor is in it) and as the properties block: the block, a key's row, the key, its values (`is-empty` when there are none), one value, one item of a list as a pill, the tags row. |
 | `md-table-block`, `md-image`, `md-embed` | Tables, images and embedded drawings. |

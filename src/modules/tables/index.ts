@@ -23,10 +23,17 @@ import {
 
 const ALIGNS: Align[] = ["none", "left", "center", "right"];
 
-/** The open editor, the table its cursor is in, and the cursor's cell. Throws if there is none. */
-function target() {
+/** The open editor, if it can be edited. Throws if there is none, or the note is in the reading view. */
+function editor() {
   const view = current.view;
   if (!view) throw new Error("Open a note first");
+  if (view.state.readOnly) throw new Error("The note is in the reading view");
+  return view;
+}
+
+/** The open editor, the table its cursor is in, and the cursor's cell. Throws if there is none. */
+function target() {
+  const view = editor();
   const head = view.state.selection.main.head;
   const found = tableAt(view.state, head);
   if (!found) throw new Error("Put the cursor in a table first");
@@ -132,8 +139,7 @@ export function activate(app: AppApi) {
     title: "Table: insert table",
     // `{rows?, columns?}`: rows under the header (default 2) and columns (default 3).
     run: (params) => {
-      const view = current.view;
-      if (!view) throw new Error("Open a note first");
+      const view = editor();
       const { rows = 2, columns = 3 } = param(params) as { rows?: number; columns?: number };
       if (!Number.isInteger(rows) || rows < 0 || !Number.isInteger(columns) || columns < 1) {
         throw new Error("rows is a whole number from 0 and columns one from 1");

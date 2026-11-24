@@ -5,6 +5,8 @@
 New:
 
 - Paste an image into a note: a screenshot or an image on the clipboard is saved at the vault root as `Pasted image <date and time>.png` and linked with `![[…]]` where the cursor is, as Obsidian does.
+- Callouts, as Obsidian draws them: `> [!warning] Title` shows as a coloured box with an icon and the title, for every type Obsidian knows and its aliases (an unknown type looks like a note). `[!note]-` starts folded and `[!note]+` open; a click on the title folds or opens it. Themes can change the colours (`--callout-warning` and the others).
+- Reading view (`Mod+Shift+E`, or the eye button over the note): the note fully rendered and read-only, with links that still follow. The status bar says "Reading", and it can be a vault's default mode in Settings.
 
 ## 0.3.1
 

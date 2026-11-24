@@ -6,7 +6,7 @@ The other npm and Cargo dependencies are linked, not adapted, and carry their li
 
 ## Lucide
 
-- Used for: the icons in the app's UI, through the npm package `lucide-react`, bundled unchanged.
+- Used for: the icons in the app's UI, through the npm package `lucide-react`, bundled unchanged. The shapes of a few icons are copied as SVG markup into `src/components/livePreview.ts` and `src/components/callout.ts`, for widgets drawn as plain DOM.
 - Source: <https://github.com/lucide-icons/lucide>. ISC License, Copyright (c) Lucide Icons and Contributors; some icons derive from Feather, MIT License, Copyright (c) 2013-present Cole Bemis. The full text is `node_modules/lucide-react/LICENSE`.
 
 ## Catppuccin

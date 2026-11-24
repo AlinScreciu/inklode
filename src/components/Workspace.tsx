@@ -203,8 +203,8 @@ interface PaneProps {
   issues: Record<string, Issue>;
   counts: Record<string, { words: number; characters: number }>;
   vaultRoot: string;
-  /** Whether the vault's default mode is source mode. */
-  sourceDefault: boolean;
+  /** The vault's default editor mode, for tabs that were not switched. */
+  modeDefault: W.EditorMode;
   /** The line to put the cursor on, when the note was opened at one. */
   jump?: { line: number };
   /** Counts changes to files in the vault. */
@@ -300,7 +300,7 @@ function Attachment({ path, vaultRoot }: { path: string; vaultRoot: string }) {
 }
 
 /** Under a note: its backlinks, folded until asked for, and the status bar. One reading of the backlinks serves both. */
-function Footer({ path, refresh, counts, mode, onOpen }: { path: string; refresh: number; counts: { words: number; characters: number } | null; mode: "source" | "live-preview" | null; onOpen: PaneHost["open"] }) {
+function Footer({ path, refresh, counts, mode, onOpen }: { path: string; refresh: number; counts: { words: number; characters: number } | null; mode: W.EditorMode | null; onOpen: PaneHost["open"] }) {
   const hits = useBacklinks(path, refresh);
   return (
     <>
@@ -311,7 +311,7 @@ function Footer({ path, refresh, counts, mode, onOpen }: { path: string; refresh
 }
 
 /** One pane: its tabs, its header, and what its tab shows, which is a module's view, a note with its footer, a file that is not text, or the empty state. */
-export function Pane({ pane, active, canClose, size, disk, noText, issues, counts, vaultRoot, sourceDefault, jump, changes, moduleVersion, error, outline, host }: PaneProps) {
+export function Pane({ pane, active, canClose, size, disk, noText, issues, counts, vaultRoot, modeDefault, jump, changes, moduleVersion, error, outline, host }: PaneProps) {
   const tab = W.shown(pane);
   const { id, path } = tab;
   const paged = tab.page ? modules.view(tab.page) : undefined;
@@ -331,8 +331,7 @@ export function Pane({ pane, active, canClose, size, disk, noText, issues, count
   const editorRef = useCallback((handle: EditorHandle | null) => host.editor(id, path ?? "", handle), [host, id, path]);
   const viewRef = useCallback((handle: ViewHandle | null) => host.view(id, handle), [host, id]);
   const onMove = useCallback(() => host.onMove(id), [host, id]);
-  const source = tab.source ?? sourceDefault;
-  const mode = source ? "source" : "live-preview";
+  const mode = tab.mode ?? modeDefault;
 
   return (
     <section
@@ -393,7 +392,7 @@ export function Pane({ pane, active, canClose, size, disk, noText, issues, count
                 // What was typed in this note and is not in the file yet, in another pane's editor or waiting to be saved.
                 content={host.peer(id, path) ?? text}
                 vaultRoot={vaultRoot}
-                sourceMode={source}
+                mode={mode}
                 jump={jump}
                 restore={host.position(id, path)}
                 autoFocus={active}

@@ -61,6 +61,7 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
         .item(&item("sidebar.toggle", "Toggle Sidebar", Some("CmdOrCtrl+\\"))?)
         .item(&item("outline.toggle", "Toggle Outline", Some("CmdOrCtrl+Shift+O"))?)
         .item(&item("editor.toggleSource", "Toggle Source Mode", Some("CmdOrCtrl+E"))?)
+        .item(&item("editor.toggleReading", "Toggle Reading View", Some("CmdOrCtrl+Shift+E"))?)
         .separator()
         .fullscreen()
         .build()?;

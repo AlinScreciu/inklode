@@ -217,8 +217,8 @@ export default function App() {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   // The file tree's context menu: the entry it is for and where it opened.
   const [treeMenu, setTreeMenu] = useState<{ entry: Entry; at: MenuAt } | null>(null);
-  // Whether the vault's `defaultMode` is source mode. A tab follows it until it is toggled, and again when the setting changes.
-  const [sourceDefault, setSourceDefault] = useState(false);
+  // The vault's `defaultMode`. A tab follows it until it is toggled, and again when the setting changes.
+  const [modeDefault, setModeDefault] = useState<W.EditorMode>("live-preview");
   const defaultMode = useRef<string | null>(null);
   // Words and characters of each note on screen, by path, for the status bars. Counted a moment after typing stops.
   const [counts, setCounts] = useState<Record<string, { words: number; characters: number }>>({});
@@ -590,9 +590,9 @@ export default function App() {
     setError((shown) => problems || (shown === before ? null : shown));
     if (next.options.defaultMode !== defaultMode.current) {
       // The setting was changed: every tab follows it. Not when a vault opens, so restored tabs keep their mode.
-      if (defaultMode.current !== null) apply(W.resetSource);
+      if (defaultMode.current !== null) apply(W.resetMode);
       defaultMode.current = next.options.defaultMode;
-      setSourceDefault(next.options.defaultMode === "source");
+      setModeDefault(next.options.defaultMode);
     }
     // Loads the modules that are on and takes out those that are off.
     await modules.apply(next.modules);
@@ -1164,8 +1164,16 @@ export default function App() {
         id: "editor.toggleSource",
         title: "Toggle source mode",
         key: "Mod+E",
-        // Of the active tab. Each tab has its own mode.
-        run: () => apply((w) => W.setSource(w, !(W.tab(w).source ?? sourceDefault))),
+        // Of the active tab. Each tab has its own mode. From the reading view it goes to source mode too.
+        run: () => apply((w) => W.setMode(w, (W.tab(w).mode ?? modeDefault) === "source" ? "live-preview" : "source")),
+      },
+      {
+        id: "editor.toggleReading",
+        title: "Toggle reading view",
+        key: "Mod+Shift+E",
+        // Of the active tab. Back from it to the vault's default mode, or to Live Preview when that is the reading view.
+        run: () =>
+          apply((w) => W.setMode(w, (W.tab(w).mode ?? modeDefault) !== "reading" ? "reading" : modeDefault === "reading" ? "live-preview" : modeDefault)),
       },
       {
         id: "settings.open",
@@ -1253,7 +1261,7 @@ export default function App() {
         run: () => mcpTokenNew(),
       },
     ]);
-  }, [openVault, openNote, loadNote, refreshTree, save, settle, arm, showIssues, notes, folders, sourceDefault, vault, reloadConfig, apply, change, followLink]);
+  }, [openVault, openNote, loadNote, refreshTree, save, settle, arm, showIssues, notes, folders, modeDefault, vault, reloadConfig, apply, change, followLink]);
 
   const inSettings = dialog?.kind === "settings";
   useEffect(() => {
@@ -1483,7 +1491,8 @@ export default function App() {
       text: shown ? shown.text.slice(0, UI_STATE_TEXT_MAX) : null,
       textTruncated: shown ? shown.text.length > UI_STATE_TEXT_MAX : false,
       cursorLine: shown?.line ?? null,
-      editorMode: (tab.source ?? sourceDefault) ? "source" : "live-preview",
+      // `live-preview`, `source` or `reading`.
+      editorMode: tab.mode ?? modeDefault,
       // The open note's text as the status bar counts it: `{words, characters}`. Null with no note or a view that is not text.
       counts: note !== null && view === "markdown" ? (counts[note] ?? null) : null,
       // Back and Forward of the active tab: the notes it has shown, oldest first, and which of them is on screen.
@@ -1780,7 +1789,7 @@ export default function App() {
         issues={issues}
         counts={counts}
         vaultRoot={vault.root}
-        sourceDefault={sourceDefault}
+        modeDefault={modeDefault}
         jump={jump}
         changes={changes}
         moduleVersion={moduleVersion}

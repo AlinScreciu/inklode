@@ -12,6 +12,7 @@ import {
   Command,
   Copy,
   Ellipsis,
+  Eye,
   FileSearch,
   FolderInput,
   FolderSearch,
@@ -32,6 +33,7 @@ import {
 import { useState, type ReactNode } from "react";
 import { commands, keyLabel } from "../commands";
 import type { RibbonButton } from "../modules";
+import type { EditorMode } from "../workspace";
 import { below, Keys, Menu, type Icon, type MenuAt, type MenuItem } from "./Menu";
 
 /** The key in force for a command, or undefined if it has none or is not registered. */
@@ -147,7 +149,7 @@ interface PaneHeaderProps {
   canBack: boolean;
   canForward: boolean;
   /** The editor's mode, or null when the pane does not show the Markdown editor. */
-  mode: "source" | "live-preview" | null;
+  mode: EditorMode | null;
   /** Whether there are other panes, so this one can be closed. */
   canClose: boolean;
   /** Whether the outline is on screen in the right sidebar. Left out, the header has no button for it. */
@@ -191,9 +193,17 @@ export function PaneHeader({ path, title, canBack, canForward, mode, canClose, o
         {mode && (
           <CommandButton
             command="editor.toggleSource"
-            title={mode === "source" ? "Source mode: switch to Live Preview" : "Live Preview: switch to source mode"}
+            title={mode === "source" ? "Source mode: switch to Live Preview" : "Switch to source mode"}
             icon={mode === "source" ? CodeXml : BookOpen}
             pressed={mode === "source"}
+          />
+        )}
+        {mode && (
+          <CommandButton
+            command="editor.toggleReading"
+            title={mode === "reading" ? "Reading view: switch back to editing" : "Switch to reading view"}
+            icon={Eye}
+            pressed={mode === "reading"}
           />
         )}
         {path && (
@@ -242,7 +252,7 @@ interface StatusBarProps {
   backlinks: number | null;
   /** Null when the pane does not show text, e.g. a drawing. */
   counts: { words: number; characters: number } | null;
-  mode: "source" | "live-preview" | null;
+  mode: EditorMode | null;
 }
 
 /** The quiet line under a pane: backlinks, words, characters and the editor's mode. */
@@ -257,7 +267,7 @@ export function StatusBar({ backlinks, counts, mode }: StatusBarProps) {
       )}
       {counts && <span className="status-words">{plural(counts.words, "word")}</span>}
       {counts && <span className="status-characters">{plural(counts.characters, "character")}</span>}
-      {mode && <span className="status-mode">{mode === "source" ? "Source" : "Live Preview"}</span>}
+      {mode && <span className="status-mode">{mode === "source" ? "Source" : mode === "reading" ? "Reading" : "Live Preview"}</span>}
     </footer>
   );
 }
