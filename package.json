@@ -1,7 +1,7 @@
 {
   "name": "inklode",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Local-first desktop Markdown notes app for a plain folder of notes, built for working with AI agents: MCP server, git history, review inbox and claims with evidence.",
   "license": "MIT",
   "author": "Alin Screciu",
