@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+New:
+
+- Paste an image into a note: a screenshot or an image on the clipboard is saved at the vault root as `Pasted image <date and time>.png` and linked with `![[…]]` where the cursor is, as Obsidian does.
+
 ## 0.3.1
 
 Fixed:

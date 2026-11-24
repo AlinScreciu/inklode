@@ -27,7 +27,7 @@
     "preview": "vite preview",
     "test:capture": "node src/modules/capture/append.test.mjs",
     "test:claims": "node src/modules/claims/claims.test.mjs",
-    "test:editor": "node src/components/lineEndings.test.mjs",
+    "test:editor": "node src/components/lineEndings.test.mjs && node src/components/pastedImage.test.mjs",
     "test:excalidraw": "node src/modules/excalidraw/format.test.mjs",
     "test:health": "node src/modules/polled.test.mjs",
     "test:graph": "node src/modules/graph/labels.test.mjs && node src/modules/graph/options.test.mjs && node src/modules/graph/model.test.mjs",

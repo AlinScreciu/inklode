@@ -13,6 +13,7 @@ import { modules, notePath } from "../modules";
 import { lineChanges, middle } from "../textDiff";
 import { eolOf, toLf, withEol } from "./lineEndings";
 import { livePreview, markdownSyntax, noteName, titleLine } from "./livePreview";
+import { imageExtension, pastedImageName } from "./pastedImage";
 
 export interface EditorHandle {
   /**
@@ -101,6 +102,33 @@ function imagePaths(src: string, notePath: string): string[] {
     return [...new Set([from(notePath), from("")])];
   } catch {
     return [];
+  }
+}
+
+/** Saves a pasted image under a free name (pastedImage.ts) and puts its `![[link]]` over the selection. */
+async function pasteImage(view: EditorView, image: File) {
+  const ext = imageExtension(image.type)!;
+  const data = await new Promise<string>((done, fail) => {
+    const reader = new FileReader();
+    // A data URL is `data:<type>;base64,<data>`.
+    reader.onload = () => done((reader.result as string).slice((reader.result as string).indexOf(",") + 1));
+    reader.onerror = () => fail(reader.error);
+    reader.readAsDataURL(image);
+  });
+  const at = new Date();
+  for (let n = 0; ; n++) {
+    const name = pastedImageName(at, ext, n);
+    try {
+      await call("attachment.create", { path: name, data });
+    } catch (e) {
+      // Taken: the next number. The core's `Exists` reads "already exists: <path>".
+      if (n < 100 && /already exists/i.test(String(e))) continue;
+      throw e;
+    }
+    // The editor may be gone (the tab closed) while the file was written; the image is kept.
+    if (!view.dom.isConnected) return;
+    view.dispatch(view.state.replaceSelection(`![[${name}]]`));
+    return;
   }
 }
 
@@ -195,6 +223,15 @@ export function Editor({ ref, path, content, vaultRoot, sourceMode, jump, restor
               if (pos === null || !linkAt(v.state, pos)) return false;
               v.dispatch({ selection: { anchor: pos } });
               void commands.run("link.follow", { newTab: true });
+              return true;
+            },
+            // An image on the clipboard (a screenshot, an image copied in a browser) is saved into the vault and
+            // linked where the cursor is. Text on the clipboard is left to CodeMirror.
+            paste(event, v) {
+              const image = [...(event.clipboardData?.files ?? [])].find((file) => imageExtension(file.type));
+              if (!image) return false;
+              event.preventDefault();
+              pasteImage(v, image).catch(commands.onError);
               return true;
             },
           }),

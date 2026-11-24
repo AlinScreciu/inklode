@@ -382,6 +382,14 @@ export function mockCall(name: string, params: Record<string, unknown>): unknown
       changed(path);
       return null;
     }
+    case "attachment.create": {
+      // The mock vault holds text only: the file is listed, empty, and an image of it does not load.
+      const taken = [...files.keys(), ...folders].some((p) => spelling(p) === spelling(path));
+      if (taken) throw new Error(`already exists: ${notePath(path)}`);
+      files.set(notePath(path), "");
+      changed(path);
+      return null;
+    }
     case "note.resolve":
       return { path: resolve(params.link as string, params.from as string) };
     case "note.backlinks":

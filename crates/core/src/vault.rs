@@ -199,6 +199,22 @@ impl Vault {
     /// anything has that path, and the disk is the judge of that: on macOS a name
     /// that differs only in case or in Unicode normal form is the same file.
     pub fn create(&self, rel: &str, content: &str) -> Result<(), Error> {
+        self.create_new(rel)?;
+        if content.is_empty() { Ok(()) } else { self.write(rel, content) }
+    }
+
+    /// `create` for a file that is not text, such as a pasted image. The bytes go straight into the new
+    /// file, which is removed again if they cannot all be written.
+    pub fn create_bytes(&self, rel: &str, bytes: &[u8]) -> Result<(), Error> {
+        let (path, mut file) = self.create_new(rel)?;
+        file.write_all(bytes).and_then(|()| file.sync_all()).map_err(|e| {
+            let _ = fs::remove_file(&path);
+            io_err(&path, e)
+        })
+    }
+
+    /// Takes the name `rel` for a new, empty file, and makes the folders above it.
+    fn create_new(&self, rel: &str) -> Result<(PathBuf, fs::File), Error> {
         let path = self.resolve(rel)?;
         if hidden(rel) {
             return Err(Error::BadPath(rel.to_string()));
@@ -207,11 +223,10 @@ impl Vault {
         fs::create_dir_all(dir).map_err(|e| io_err(dir, e))?;
         // `create_new` takes the name and fails if it is taken, in one step.
         match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => return Err(Error::Exists(rel.to_string())),
-            Err(e) => return Err(io_err(&path, e)),
+            Ok(file) => Ok((path, file)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(Error::Exists(rel.to_string())),
+            Err(e) => Err(io_err(&path, e)),
         }
-        if content.is_empty() { Ok(()) } else { self.write(rel, content) }
     }
 
     /// `rel` as the disk spells it. On a disk that ignores case or Unicode normal

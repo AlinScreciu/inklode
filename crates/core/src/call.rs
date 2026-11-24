@@ -3,6 +3,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -153,6 +155,12 @@ struct CreateParams {
     own: bool,
 }
 
+#[derive(Deserialize)]
+struct AttachmentParams {
+    path: String,
+    data: String,
+}
+
 /// `note.delete` and `folder.delete`.
 #[derive(Deserialize)]
 struct DeleteParams {
@@ -297,6 +305,7 @@ impl Core {
     /// | `note.read`      | `{path}`          | `{content}`                       |
     /// | `note.write`     | `{path, content, base?}` | `null`. Creates or replaces the file. With `base`, the text the caller last read or wrote, it fails with `Conflict` and writes nothing unless the file still holds exactly that, byte for byte; a missing file counts as empty |
     /// | `note.create`    | `{path, content?, own?}` | `null`. Makes a new file and the folders above it; fails with `Exists` if anything has the path, also under another case or Unicode normal form where the disk ignores those |
+    /// | `attachment.create` | `{path, data}` | `null`. `note.create` for a file that is not text, such as a pasted image: `data` is its bytes in base64 |
     /// | `config.read`    | `{path}`          | `{content}`. `path` is `.inklode/…`, with no other dot name in it |
     /// | `config.write`   | `{path, content}` | `null`. `path` as for `config.read` |
     /// | `note.resolve`   | `{link, from}`    | `{path}`, null if no note matches |
@@ -359,6 +368,14 @@ impl Core {
                 let settled = review::settled(dir, vault.root(), git_path(vault, &p.path).ok());
                 vault.create(&p.path, &p.content)?;
                 review::accept_own(dir, vault.root(), &settled);
+                self.dirty.store(true, Ordering::SeqCst);
+                Ok(Value::Null)
+            }
+            // A new file that is not a note, such as a pasted image: `data` is its bytes in base64.
+            "attachment.create" => {
+                let p: AttachmentParams = parse(name, params)?;
+                let bytes = BASE64.decode(&p.data).map_err(|e| Error::BadParams(name.to_string(), e.to_string()))?;
+                self.vault()?.create_bytes(&p.path, &bytes)?;
                 self.dirty.store(true, Ordering::SeqCst);
                 Ok(Value::Null)
             }
@@ -1063,6 +1080,26 @@ mod tests {
             assert_eq!(fs::read_to_string(root.join(path)).unwrap(), "keep");
         }
         assert_eq!(fs::read_dir(root).unwrap().count(), 3);
+    }
+
+    #[test]
+    fn attachment_create_writes_the_bytes_and_never_replaces_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::write(root.join("a.png"), "keep").unwrap();
+        let mut core = Core::new();
+        core.call("vault.open", json!({ "path": root })).unwrap();
+
+        // "iVBORw0KGgo=" is the PNG signature, bytes that are not UTF-8.
+        let png = [0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n'];
+        core.call("attachment.create", json!({ "path": "img/Pasted image.png", "data": "iVBORw0KGgo=" })).unwrap();
+        assert_eq!(fs::read(root.join("img/Pasted image.png")).unwrap(), png);
+
+        assert!(matches!(core.call("attachment.create", json!({ "path": "a.png", "data": "iVBORw0KGgo=" })), Err(Error::Exists(_))));
+        assert_eq!(fs::read_to_string(root.join("a.png")).unwrap(), "keep");
+        assert!(matches!(core.call("attachment.create", json!({ "path": "b.png", "data": "not base64!" })), Err(Error::BadParams(..))));
+        assert!(!root.join("b.png").exists());
+        assert!(matches!(core.call("attachment.create", json!({ "path": ".git/x.png", "data": "" })), Err(Error::BadPath(_))));
     }
 
     #[test]
