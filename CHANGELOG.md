@@ -5,6 +5,9 @@
 New:
 
 - Paste an image into a note: a screenshot or an image on the clipboard is saved at the vault root as `Pasted image <date and time>.png` and linked with `![[…]]` where the cursor is, as Obsidian does.
+- Link suggestions: typing `[[` lists the notes whose names match what you type, best match first, with the folder shown when two notes have the same name. `![[` lists every file, images included, and `[[note#` lists that note's headings (`[[#` this note's). Enter or Tab puts in the link with its closing `]]`.
+- Bold (Cmd+B), italic (Cmd+I) and link (Cmd+K) in the editor. Bold and italic wrap the selection or take the marks off it again; with nothing selected they put in the pair with the cursor between. Cmd+K makes `[text]()` from the selection, or `[](url)` from a selected URL. All three are in the command palette and can be rebound.
+- A heading link (`[[note#Heading]]`, `[[#Heading]]` in the same note) opens the note at that heading, and a block link (`[[note#^id]]`) at the line that ends in `^id`. Before, the note opened at the top.
 
 ## 0.3.1
 

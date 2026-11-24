@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FilePlus, FolderPlus, Shapes } from "lucide-react";
 import { openSearchPanel } from "@codemirror/search";
+import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { appearanceNow, applyOptions } from "./appearance";
 import { commands, keyOf } from "./commands";
 import type { EditorHandle, EditorPosition, Heading } from "./components/Editor";
 import { canMove, DRAWING, FileTree, folderPaths, foldersOf, notePaths, parentOf, type Entry } from "./components/FileTree";
+import { insertLink, toggleMark, type Doc, type Edit } from "./components/formatting";
+import { splitLink, subpathLine } from "./components/linkSuggest";
 import { backlinksOf, Search } from "./components/Hits";
 import { Confirm, Menu, type MenuAt } from "./components/Menu";
 import { Palette } from "./components/Palette";
@@ -86,6 +89,32 @@ let zoom = 1;
 function zoomBy(step: number) {
   zoom = step === 0 ? 1 : Math.min(3, Math.max(0.5, Math.round((zoom + step) * 10) / 10));
   void setZoom(zoom);
+}
+
+/** The CodeMirror editor of the active pane, or of any pane. Throws with no note open. */
+function activeView(): EditorView {
+  const editor = document.querySelector<HTMLElement>(".pane.is-active .cm-editor") ?? document.querySelector<HTMLElement>(".cm-editor");
+  const view = editor && EditorView.findFromDOM(editor);
+  if (!view) throw new Error("Open a note first");
+  return view;
+}
+
+/** Makes a formatting edit (components/formatting.ts) at each selection of the active pane's editor. */
+function format(edit: (doc: Doc, from: number, to: number) => Edit) {
+  // Typed in a box outside the editor (search, a prompt): the key is that box's, the note is left alone.
+  const focused = document.activeElement;
+  if (focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement) return;
+  const view = activeView();
+  const { state } = view;
+  const doc: Doc = { length: state.doc.length, slice: (from, to) => state.sliceDoc(from, to) };
+  view.dispatch(
+    state.changeByRange((range) => {
+      const e = edit(doc, range.from, range.to);
+      return { changes: { from: e.from, to: e.to, insert: e.insert }, range: EditorSelection.range(e.anchor, e.head) };
+    }),
+    { userEvent: "input.format", scrollIntoView: true },
+  );
+  view.focus();
 }
 
 /** localStorage can be unavailable; remembering the last vault is a convenience, never required. */
@@ -659,13 +688,27 @@ export default function App() {
     [settle, cutOff, refreshTree, reloadConfig],
   );
 
+  /**
+   * Opens the note a link names. `note#Heading` opens it at that heading and `note#^id` at the line that ends in
+   * `^id` (linkSuggest.ts `subpathLine`); `#Heading` alone is in the open note, which then only scrolls there.
+   */
   const followLink = useCallback(
     async (link: string, newTab = false) => {
       const from = openPath();
       if (!from) return;
       const { path } = await call<{ path: string | null }>("note.resolve", { link, from });
-      if (path) await openNote(path, undefined, newTab);
-      else setError(`No note named ${link.split(/[#|]/)[0].trim()}`);
+      if (!path) return setError(`No note named ${splitLink(link).name}`);
+      const { subpath } = splitLink(link);
+      let line: number | undefined;
+      if (subpath) {
+        // The text on screen, which may have edits that are not on disk yet. A file that is not text has no lines.
+        const shown = [...editors.current.values()].find((editor) => editor.path === path)?.handle.snapshot()?.text;
+        const text = shown ?? (await call<{ content: string }>("note.read", { path }).then((read) => read.content, () => ""));
+        line = subpathLine(text, subpath) ?? undefined;
+      }
+      const here = editors.current.get(W.tab(ws.current).id);
+      if (line && !newTab && path === from && here?.path === path) here.handle.reveal(line);
+      else await openNote(path, line, newTab);
     },
     [openNote],
   );
@@ -1147,13 +1190,12 @@ export default function App() {
         id: "note.find",
         title: "Find in this note",
         key: "Mod+F",
-        run: () => {
-          const editor = document.querySelector<HTMLElement>(".pane.is-active .cm-editor") ?? document.querySelector<HTMLElement>(".cm-editor");
-          const view = editor && EditorView.findFromDOM(editor);
-          if (!view) throw new Error("Open a note first");
-          openSearchPanel(view);
-        },
+        run: () => openSearchPanel(activeView()),
       },
+      // In the active pane's note, at each selection (components/formatting.ts).
+      { id: "editor.bold", title: "Toggle bold", key: "Mod+B", run: () => format((doc, from, to) => toggleMark(doc, from, to, "**")) },
+      { id: "editor.italic", title: "Toggle italic", key: "Mod+I", run: () => format((doc, from, to) => toggleMark(doc, from, to, "*")) },
+      { id: "editor.link", title: "Insert Markdown link", key: "Mod+K", run: () => format(insertLink) },
       { id: "palette.open", title: "Command palette", key: "Mod+P", run: () => setDialog({ kind: "commands" }) },
       { id: "sidebar.toggle", title: "Toggle sidebar", key: "Mod+\\", run: () => setSidebarOpen((open) => !open) },
       // The whole window, in steps of 10% from 50% to 300%. Not kept when the app is closed.

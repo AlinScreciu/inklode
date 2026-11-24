@@ -27,7 +27,7 @@
     "preview": "vite preview",
     "test:capture": "node src/modules/capture/append.test.mjs",
     "test:claims": "node src/modules/claims/claims.test.mjs",
-    "test:editor": "node src/components/lineEndings.test.mjs && node src/components/pastedImage.test.mjs",
+    "test:editor": "node src/components/lineEndings.test.mjs && node src/components/pastedImage.test.mjs && node src/components/linkSuggest.test.mjs && node src/components/formatting.test.mjs",
     "test:excalidraw": "node src/modules/excalidraw/format.test.mjs",
     "test:health": "node src/modules/polled.test.mjs",
     "test:graph": "node src/modules/graph/labels.test.mjs && node src/modules/graph/options.test.mjs && node src/modules/graph/model.test.mjs",
@@ -42,6 +42,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language": "^6.13.1",

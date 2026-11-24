@@ -1,4 +1,5 @@
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { acceptCompletion, autocompletion, pickedCompletion, type Completion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab, isolateHistory } from "@codemirror/commands";
 import { search, searchKeymap } from "@codemirror/search";
 import { languages } from "@codemirror/language-data";
@@ -11,7 +12,9 @@ import { commands } from "../commands";
 import { assetUrl, call } from "../core/client";
 import { modules, notePath } from "../modules";
 import { lineChanges, middle } from "../textDiff";
+import { notePaths, type Entry } from "./FileTree";
 import { eolOf, toLf, withEol } from "./lineEndings";
+import { headingsOf, linkQuery, suggestFiles } from "./linkSuggest";
 import { livePreview, markdownSyntax, noteName, titleLine } from "./livePreview";
 import { imageExtension, pastedImageName } from "./pastedImage";
 
@@ -132,7 +135,55 @@ async function pasteImage(view: EditorView, image: File) {
   }
 }
 
-/** The language to colour a fenced code block with, from the name after its ```. Null leaves the code plain. */
+/**
+ * Suggestions while a wikilink is typed (linkSuggest.ts): notes after `[[`, any file after `![[`, and a note's
+ * headings after `#` (this note's after `[[#`). Picking one writes it and the closing `]]`, and the cursor goes
+ * after them. `files` gives the vault's file paths.
+ */
+function linkCompletion(notePath: string, files: () => Promise<string[]>) {
+  const close = (text: string) => (view: EditorView, completion: Completion, from: number, to: number) => {
+    const closed = view.state.sliceDoc(to, to + 2) === "]]";
+    view.dispatch({
+      changes: { from, to, insert: closed ? text : text + "]]" },
+      selection: { anchor: from + text.length + 2 },
+      annotations: pickedCompletion.of(completion),
+      userEvent: "input.complete",
+    });
+  };
+  /** The text of the note a link names, or null when there is no such note. */
+  const textOf = async (name: string) => {
+    const found = await call<{ path: string | null }>("note.resolve", { link: name, from: notePath });
+    return found.path ? (await call<{ content: string }>("note.read", { path: found.path })).content : null;
+  };
+  return async (context: CompletionContext): Promise<CompletionResult | null> => {
+    const line = context.state.doc.lineAt(context.pos);
+    const query = linkQuery(line.text.slice(0, context.pos - line.from));
+    if (!query) return null;
+    if (query.heading) {
+      const text = query.name.trim() ? await textOf(query.name).catch(() => null) : context.state.doc.toString();
+      if (text === null || context.aborted) return null;
+      return {
+        from: line.from + query.heading.start,
+        // The boost keeps the note's order among headings that match equally well (all of them before a letter
+        // is typed); CodeMirror would sort those by name.
+        options: headingsOf(text)
+          .filter((h) => h.text)
+          .map((h, i) => ({ label: h.text, detail: `H${h.level}`, apply: close(h.text), boost: -i / 1000 })),
+        // CodeMirror narrows the headings down as more is typed, so the note is read once per `#`.
+        validFor: /^[^[\]|#^]*$/,
+      };
+    }
+    const found = suggestFiles(await files(), query.name, query.embed);
+    if (context.aborted) return null;
+    return {
+      from: line.from + query.start,
+      options: found.map((s) => ({ label: s.label, detail: s.folder || undefined, apply: close(s.link) })),
+      // The order is suggestFiles', asked again on every key.
+      filter: false,
+    };
+  };
+}
+
 /**
  * The language of a code block, from the word after its ```: a language's name or alias (`sh`, `ts`), else a
  * file extension (`py`, `rs`). The language's parser is loaded on first use, each from its own chunk.
@@ -149,8 +200,19 @@ function codeLanguage(info: string) {
 export function Editor({ ref, path, content, vaultRoot, sourceMode, jump, restore, autoFocus, refresh, onChange, onMove }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
-  const latest = useRef({ onChange, onMove, autoFocus });
-  latest.current = { onChange, onMove, autoFocus };
+  const latest = useRef({ onChange, onMove, autoFocus, refresh });
+  latest.current = { onChange, onMove, autoFocus, refresh };
+  // The vault's file paths for link suggestions, read once per `refresh`.
+  const files = useRef<{ refresh: number; paths: Promise<string[]> } | null>(null);
+  const vaultFiles = () => {
+    if (!files.current || files.current.refresh !== latest.current.refresh) {
+      const paths = call<Entry[]>("vault.tree").then(notePaths);
+      // A failed read is tried again on the next key.
+      paths.catch(() => (files.current = null));
+      files.current = { refresh: latest.current.refresh, paths };
+    }
+    return files.current.paths;
+  };
   // The line ending the note has on disk (lineEndings.ts). The editor's document has "\n" only; every text that
   // leaves the editor (`onChange`, `snapshot`) has this one again, so an edit changes only the lines it touched.
   const eol = useRef(eolOf(content));
@@ -213,7 +275,9 @@ export function Editor({ ref, path, content, vaultRoot, sourceMode, jump, restor
           fromModules.current.of(modules.editorExtension()),
           // Find and replace in this note: the panel sits on top of the pane. `note.find` (App.tsx) opens it too.
           search({ top: true }),
-          keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+          // Link suggestions. Enter, the arrows and Escape work the list; Tab also picks (the keymap below).
+          autocompletion({ override: [linkCompletion(path, vaultFiles)], icons: false }),
+          keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap, { key: "Tab", run: acceptCompletion }, indentWithTab]),
           EditorView.domEventHandlers({
             // Cmd/Ctrl+click or a middle click on a link: put the cursor there and open it in a new tab. `link.follow`
             // is the app's command (App.tsx); it reads the link from the editor of the pane that was clicked.

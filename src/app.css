@@ -4292,3 +4292,58 @@ kbd {
 .cm-editor .cm-searchMatch-selected {
   background: color-mix(in srgb, var(--accent) 55%, transparent);
 }
+
+/*
+ * The list of suggestions while a `[[link]]` is typed (CodeMirror's autocompletion), in the look of a menu.
+ * `.editor .cm-editor` outweighs CodeMirror's own light and dark rules for it.
+ */
+.editor .cm-editor .cm-tooltip.cm-tooltip-autocomplete {
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+}
+
+.editor .cm-editor .cm-tooltip.cm-tooltip-autocomplete > ul {
+  min-width: 240px;
+  max-width: min(420px, 90vw);
+  max-height: calc(var(--row-height) * 9);
+  font: var(--font-size-ui) / 1.4 var(--font-ui);
+}
+
+.editor .cm-editor .cm-tooltip.cm-tooltip-autocomplete > ul > li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  height: var(--row-height);
+  padding: 0 8px;
+  border-radius: var(--radius-s);
+  line-height: var(--row-height);
+}
+
+.editor .cm-editor .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+.editor .cm-editor .cm-tooltip-autocomplete .cm-completionLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The folder of a note whose name another note has too, and the level of a heading. */
+.editor .cm-editor .cm-tooltip-autocomplete .cm-completionDetail {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.92em;
+  font-style: normal;
+}
+
+.editor .cm-editor .cm-tooltip-autocomplete .cm-completionMatchedText {
+  color: var(--accent);
+  text-decoration: none;
+}
