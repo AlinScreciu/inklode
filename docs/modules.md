@@ -2,17 +2,17 @@
 
 The reference for each module: what it does, its commands, its entry in `ui_state` (what the in-app MCP server reports, see [mcp.md](mcp.md)) and its known limits. The claims module has its own page, [claims.md](claims.md).
 
-Sections: [Excalidraw](#excalidraw), [Graph view](#graph-view), [Tables](#tables), [Git history](#git-history), [Merging changes made outside](#merging-changes-made-outside), [Review](#review), [Vault health](#vault-health), [Tasks](#tasks), [Quick capture](#quick-capture).
+Sections: [Excalidraw](#excalidraw), [Graph view](#graph-view), [Tables](#tables), [Git history](#git-history), [Merging changes made outside](#merging-changes-made-outside), [Review](#review), [Vault health](#vault-health), [Tasks](#tasks), [Quick capture](#quick-capture), [Templates](#templates).
 
 ## How modules work
 
 A feature beyond the base app (editor, file tree, links, search, palette, settings) is a module, and each one can be switched off per vault.
 
-- The flag is `"modules": {"<id>": true}` in `.inklode/settings.json`. A module with no entry is on or off by its default (`excalidraw`: on, `graph`: on, `tables`: on, `history`: off, `merge`: off, `review`: off, `health`: off, `tasks`: off, `capture`: off, `claims`: off). `capture` is the exception: whether it is on is kept per vault in the app's own settings, and its entry here is not read (see [Quick capture](#quick-capture)).
+- The flag is `"modules": {"<id>": true}` in `.inklode/settings.json`. A module with no entry is on or off by its default (`excalidraw`: on, `graph`: on, `tables`: on, `history`: off, `merge`: off, `review`: off, `health`: off, `tasks`: off, `capture`: off, `templates`: off, `claims`: off). `capture` is the exception: whether it is on is kept per vault in the app's own settings, and its entry here is not read (see [Quick capture](#quick-capture)).
 - Settings (`Mod+,`) has a checkbox per module under "Modules". It runs the command `module.toggle {id, on?}`. The change is in force at once, without a restart.
 - A module that is off is not loaded: its code is imported when it is switched on, and the library it needs when it is first used.
 
-To add a module: write `src/modules/<id>/index.ts` with an `activate(app)` that registers what it adds through `AppApi` (`src/modules.ts`: commands, a view for a file type or one shown with no file, a renderer for embeds, a CodeMirror extension for the editor, a panel for the right sidebar, a ribbon button with an optional badge, entries for `ui_state`, listeners for a saved note and for changes in the vault, opening a note at a line, calls into the core), and add a row to `MODULES` in `src/modules.ts` that imports it. What a module registers is taken out again when it is switched off.
+To add a module: write `src/modules/<id>/index.ts` with an `activate(app)` that registers what it adds through `AppApi` (`src/modules.ts`: commands, a view for a file type or one shown with no file, a renderer for embeds, a CodeMirror extension for the editor, a panel for the right sidebar, a ribbon button with an optional badge, entries for `ui_state`, a question in the quick switcher's box (`ui.pick`), listeners for a saved note and for changes in the vault, opening a note at a line, calls into the core), and add a row to `MODULES` in `src/modules.ts` that imports it. What a module registers is taken out again when it is switched off.
 
 ## Excalidraw
 
@@ -227,3 +227,21 @@ The `capture` module, off by default. Its switch in Settings (and `module.toggle
 `capture` in `ui_state`: `hotkey` (as in the app's settings), `registered` (whether the system has it registered for Inklode now), `error` (why not, or null), `count` (captures appended since the module was switched on) and `last` (the path of the note the last one went to, or null).
 
 Known limits: macOS lets two apps register the same hotkey and gives the key to one of them, so a hotkey another app already has is not reported as an error; the hotkey is typed in Settings, not recorded from a key press; with Inklode hidden (Cmd+H) the box unhides the app, so the main window shows again behind the app in front; the box comes up on the display it was first shown on; a capture made while the main window's page is reloading is lost; outside macOS the box is an ordinary always-on-top window and was not tried.
+
+## Templates
+
+The `templates` module, off by default, like Obsidian's core Templates plugin. The notes in the vault's template folder are templates: `_templates` unless the vault's setting `templateFolder` names another (Settings > Editor > Template folder, or `settings.set {key: "templateFolder", value: "Meta/Templates"}`), with the notes in its subfolders too. Obsidian's own setting in `.obsidian/templates.json` is not read.
+
+- "Insert template" (`template.insert`) lists the templates in the quick switcher's box, and puts the one picked at the cursor of the active note, over the selection if there is one. It is one edit: Undo takes it back.
+- "New note from template" (`template.newNote`) asks for the template, then for the new note's name (`Folder/Name` puts it in a folder), makes the note with the template's text and opens it. A note that is there already is never written over: the command fails with "already exists".
+- In the template's text, `{{title}}` is the note's name (its file name without `.md`), `{{date}}` the day as `YYYY-MM-DD`, `{{time}}` the time as `HH:mm`, and `{{date:FORMAT}}` and `{{time:FORMAT}}` the moment in a Moment.js format: `YYYY`, `YY`, `Q`, `MMMM` (November), `MMM` (Nov), `MM`, `M`, `DD`, `D`, `Do` (24th), `DDDD` and `DDD` (day of the year), `dddd` (Tuesday), `ddd` (Tue), `dd`, `d`, `E`, `HH`, `H`, `hh`, `h`, `kk`, `k`, `mm`, `m`, `ss`, `s`, `SSS`, `A`, `a`, `W` and `WW` (ISO week), `GGGG` (its year), `X`, `x`, `Z`, `ZZ`, and `[text]` as it is. Other text in braces is left as it is.
+- Frontmatter: a template's frontmatter goes to the top of the note, not to the cursor. A note without frontmatter gets the template's. A note with frontmatter gets the template's keys that it does not have, with the lines under them, after its own; a key both have keeps the note's value. With the cursor in the note's frontmatter, the template's text goes right after the frontmatter.
+
+| Command | What |
+|---|---|
+| `template.insert {template?}` | Inserts a template at the cursor of the active note. `template` is a template's path or its name; without it the box asks. |
+| `template.newNote {template?, path?}` | Makes the note `path` (`.md` added when left out) from a template and opens it. What is left out is asked for. |
+
+The filling in and the frontmatter merge are `src/modules/templates/template.ts`, checked by `pnpm test:templates`.
+
+Known limits: the date formats are English only, and Moment's locale weeks (`w`, `ww`, `gggg`) are not read; a key that both frontmatters have keeps the note's value, also a list such as `tags` (Obsidian adds the template's tags to the note's); there is no `{{cursor}}` and no other Templater syntax.

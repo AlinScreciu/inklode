@@ -249,7 +249,7 @@ export function Editor({ ref, path, content, vaultRoot, mode, jump, restore, aut
       },
       version,
       // A failed lookup leaves the link looking normal.
-      (target) => call<{ path: string | null }>("note.resolve", { link: target, from: path }).then((found) => found.path !== null, () => true),
+      (target) => call<{ path: string | null }>("note.resolve", { link: target, from: path, files: true }).then((found) => found.path !== null, () => true),
     ),
   ];
   // The reading view is Live Preview's own decorations, in an editor that takes no input and cannot get the

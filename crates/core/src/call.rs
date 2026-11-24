@@ -173,6 +173,8 @@ struct DeleteParams {
 struct ResolveParams {
     link: String,
     from: String,
+    #[serde(default)]
+    files: bool,
 }
 
 #[derive(Deserialize)]
@@ -306,9 +308,10 @@ impl Core {
     /// | `note.write`     | `{path, content, base?}` | `null`. Creates or replaces the file. With `base`, the text the caller last read or wrote, it fails with `Conflict` and writes nothing unless the file still holds exactly that, byte for byte; a missing file counts as empty |
     /// | `note.create`    | `{path, content?, own?}` | `null`. Makes a new file and the folders above it; fails with `Exists` if anything has the path, also under another case or Unicode normal form where the disk ignores those |
     /// | `attachment.create` | `{path, data}` | `null`. `note.create` for a file that is not text, such as a pasted image: `data` is its bytes in base64 |
+    /// | `attachment.read` | `{path}` | `{data}`: `note.read` for a file that is not text, such as a PDF: `data` is its bytes in base64 |
     /// | `config.read`    | `{path}`          | `{content}`. `path` is `.inklode/…`, with no other dot name in it |
     /// | `config.write`   | `{path, content}` | `null`. `path` as for `config.read` |
-    /// | `note.resolve`   | `{link, from}`    | `{path}`, null if no note matches |
+    /// | `note.resolve`   | `{link, from, files?}` | `{path}`, null if no note matches. With `files: true`, a link that reaches no note may reach a file that is not a note, such as a PDF, found as an embed's file is: next to `from`, then from the vault root |
     /// | `note.backlinks` | `{path}`          | list of `{path, line, text}`      |
     /// | `note.rename`    | `{from, to, own?}` | `{updated}`: the notes that did not move and had links rewritten. Any file, not only a note: an image's embeds are rewritten too. `from` may be spelled in another case or normal form than on disk, where the disk ignores those. Fails with `BadName`, before anything moves, when the new name (or a folder the move would make) has one of `[ ] # \| ^` or starts or ends with a space, since no link could say it. The notes are rewritten together (`Vault::write_all`), each through a temporary file that is flushed to the disk first; one that another program changed while the rename ran keeps its old links, and the rename then fails with `Conflict` after the others are done |
     /// | `folder.rename`  | `{from, to, own?}` | `{updated}`, as `note.rename`. The folder moves with everything in it; `to` must not exist, be inside `from`, or be in a dot folder |
@@ -379,6 +382,11 @@ impl Core {
                 self.dirty.store(true, Ordering::SeqCst);
                 Ok(Value::Null)
             }
+            // A file that is not a note, such as a PDF the window draws itself.
+            "attachment.read" => {
+                let p: PathParam = parse(name, params)?;
+                Ok(json!({ "data": BASE64.encode(self.vault()?.read_bytes(note_path(&p.path)?)?) }))
+            }
             // Config files are not notes, so a write needs no reindex.
             "config.read" => {
                 let p: PathParam = parse(name, params)?;
@@ -392,7 +400,8 @@ impl Core {
             "note.resolve" => {
                 let p: ResolveParams = parse(name, params)?;
                 let (_, index) = self.fresh()?;
-                Ok(json!({ "path": index.resolve(&p.link, &p.from) }))
+                let path = if p.files { index.file_of(&p.link, &p.from) } else { index.resolve(&p.link, &p.from) };
+                Ok(json!({ "path": path }))
             }
             "note.backlinks" => {
                 let p: PathParam = parse(name, params)?;
@@ -675,6 +684,12 @@ mod tests {
         assert_eq!(resolved, json!({ "path": "Home.md" }));
         let missing = core.call("note.resolve", json!({ "link": "nope", "from": "a.md" })).unwrap();
         assert_eq!(missing, json!({ "path": null }));
+        // A file that is not a note only with `files`.
+        assert_eq!(core.call("note.resolve", json!({ "link": "pic.png", "from": "a.md" })).unwrap(), json!({ "path": null }));
+        let file = core.call("note.resolve", json!({ "link": "pic.png", "from": "a.md", "files": true })).unwrap();
+        assert_eq!(file, json!({ "path": "pic.png" }));
+        let note = core.call("note.resolve", json!({ "link": "home", "from": "a.md", "files": true })).unwrap();
+        assert_eq!(note, json!({ "path": "Home.md" }));
 
         let backlinks = core.call("note.backlinks", json!({ "path": "Home.md" })).unwrap();
         assert_eq!(backlinks, json!([{ "path": "a.md", "line": 1, "text": "go [[home]]" }]));
@@ -1080,6 +1095,24 @@ mod tests {
             assert_eq!(fs::read_to_string(root.join(path)).unwrap(), "keep");
         }
         assert_eq!(fs::read_dir(root).unwrap().count(), 3);
+    }
+
+    #[test]
+    fn attachment_read_gives_the_bytes_and_refuses_dot_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // Bytes that are not UTF-8, which `note.read` refuses.
+        fs::write(root.join("doc.pdf"), [b'%', b'P', b'D', b'F', 0xff, 0x00]).unwrap();
+        fs::create_dir(root.join(".git")).unwrap();
+        fs::write(root.join(".git/x.pdf"), "secret").unwrap();
+        let mut core = Core::new();
+        core.call("vault.open", json!({ "path": root })).unwrap();
+
+        assert!(core.call("note.read", json!({ "path": "doc.pdf" })).is_err());
+        let read = core.call("attachment.read", json!({ "path": "doc.pdf" })).unwrap();
+        assert_eq!(BASE64.decode(read["data"].as_str().unwrap()).unwrap(), [b'%', b'P', b'D', b'F', 0xff, 0x00]);
+        assert!(matches!(core.call("attachment.read", json!({ "path": ".git/x.pdf" })), Err(Error::BadPath(_))));
+        assert!(core.call("attachment.read", json!({ "path": "missing.pdf" })).is_err());
     }
 
     #[test]

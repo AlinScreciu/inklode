@@ -90,6 +90,17 @@ export function onCloseRequested(handler: () => Promise<boolean>): () => void {
   );
 }
 
+/**
+ * Opens the system's print dialog on the page, whose print styles decide what is on paper. In the desktop app the
+ * shell does it (`print_page` in src-tauri/src/lib.rs), with margins on the paper; WebKit on macOS does not print
+ * for `window.print()` itself. Resolves when the dialog is up, not when it is done.
+ */
+export async function printPage(): Promise<void> {
+  if (!inTauri) return window.print();
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("print_page");
+}
+
 /** Ends the app. The caller has saved what there was to save. */
 export async function quitApp(): Promise<void> {
   if (!inTauri) return;

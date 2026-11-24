@@ -34,6 +34,7 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md). The details of the cl
 - `[[Wikilinks]]` with aliases, heading links (`[[note#Heading]]`) and block links (`[[note#^id]]`) that open at their place, backlinks, and renames that rewrite the links that point to the moved note or folder. Typing `[[` suggests notes, `![[` any file, and `#` after a note's name its headings.
 - File tree, tabs, split panes, an outline, back and forward.
 - Quick switcher (`Mod+O`), command palette (`Mod+P`), search in all notes (`Mod+Shift+F`).
+- PDFs open in a tab, from the file tree or a `[[link]]`, page by page with zoom and text you can select. A note can be exported to PDF ("Export note to PDF…", or the note's "…" menu): the print dialog opens on the note alone, on white, and its PDF menu saves it.
 - Saving never writes over a text the app has not seen: when a file changed on disk under an unsaved edit, the app asks (keep mine, take theirs, show both). Deleting moves to `.trash/` in the vault.
 - Per-vault themes and CSS snippets, four built-in themes, light and dark, and keys that can be rebound. See [docs/settings.md](docs/settings.md) and [docs/themes.md](docs/themes.md).
 
@@ -52,6 +53,7 @@ Everything beyond the base app is a module that can be switched on or off per va
 | Vault health | `health` | off | Broken links, notes without links, and notes that are stale against the code repositories they name. |
 | Tasks | `tasks` | off | Every open checkbox of the vault in one panel, with ticking. |
 | Quick capture | `capture` | off | A system-wide hotkey that appends a line to a capture note. |
+| Templates | `templates` | off | Insert a note from the template folder (`_templates`) at the cursor, or start a new note from one, with `{{title}}`, `{{date}}` and `{{time}}` filled in, as Obsidian's Templates plugin does. |
 | Claims | `claims` | off | Lines that carry their evidence, a status mark for each, and a queue of the ones that fail or went stale. |
 
 The reference for each module (commands, `ui_state` entries, known limits) is in [docs/modules.md](docs/modules.md), and for claims in [docs/claims.md](docs/claims.md).
@@ -153,7 +155,10 @@ Known limits of this version:
 - Tested on macOS on Apple Silicon only. `ui_screenshot` and the capture box's panel are macOS-only code; the rest is meant to be portable and was not tried elsewhere.
 - The prebuilt app is for Apple Silicon Macs only.
 - The index keeps every note's text in memory and rescans the vault after a change, which is fine for a few thousand notes.
-- `![[note]]` shows as a link, not as the note's content.
+- `![[note]]` shows as a link, not as the note's content. `![[file.pdf]]` too.
+- A PDF has no outline, links inside it, or search in it, and one that changed on disk shows the change when it is opened again. A PDF that does not embed its fonts is drawn with the system's.
+- Export to PDF leaves out the frontmatter and inline HTML, and shows `![[note]]` as the note's name; code is not coloured.
+- A link to a file that is not a note, such as `[[file.pdf]]`, finds it next to the note or from the vault root, not in other folders.
 - A client of the MCP server in the app can open any folder as a vault (see [Security](#security)).
 - Each module lists its own known limits in [docs/modules.md](docs/modules.md) and [docs/claims.md](docs/claims.md).
 

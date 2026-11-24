@@ -131,6 +131,12 @@ impl Vault {
         fs::read_to_string(&path).map_err(|e| io_err(&path, e))
     }
 
+    /// `read` for a file that is not text, such as a PDF: its bytes as they are.
+    pub fn read_bytes(&self, rel: &str) -> Result<Vec<u8>, Error> {
+        let path = self.resolve(rel)?;
+        fs::read(&path).map_err(|e| io_err(&path, e))
+    }
+
     /// Writes the whole file through a temporary file and a rename, so a crash
     /// or a second app reading the vault never sees a half-written note.
     pub fn write(&self, rel: &str, content: &str) -> Result<(), Error> {

@@ -10,6 +10,9 @@ New:
 - A heading link (`[[note#Heading]]`, `[[#Heading]]` in the same note) opens the note at that heading, and a block link (`[[note#^id]]`) at the line that ends in `^id`. Before, the note opened at the top.
 - Callouts, as Obsidian draws them: `> [!warning] Title` shows as a coloured box with an icon and the title, for every type Obsidian knows and its aliases (an unknown type looks like a note). `[!note]-` starts folded and `[!note]+` open; a click on the title folds or opens it. Themes can change the colours (`--callout-warning` and the others).
 - Reading view (`Mod+Shift+E`, or the eye button over the note): the note fully rendered and read-only, with links that still follow. The status bar says "Reading", and it can be a vault's default mode in Settings.
+- Templates, a module like Obsidian's core Templates plugin (off until you switch it on under Settings > Modules). "Insert template" puts a note from the template folder at the cursor, and "New note from template" starts a note from one. `{{title}}`, `{{date}}`, `{{time}}` and `{{date:YYYY-MM-DD}}`-style formats are filled in, and the template's frontmatter is merged into the note's. The folder is `_templates` unless Settings > Editor > Template folder names another.
+- PDFs open in a tab, from the file tree or a `[[link]]`: every page, with zoom and text you can select and copy.
+- Export a note to PDF: "Export note to PDF…" in the palette or the note's "…" menu opens the print dialog on the note alone, on white, with its images; "Save as PDF" in the dialog's PDF menu writes the file.
 
 ## 0.3.1
 

@@ -43,12 +43,15 @@ export interface AppApi {
    * `registerRibbon`: a button in the icon rail at the window's left edge, which runs a command.
    * `registerPanel`: a panel for the right sidebar. `togglePanel` opens it, in place of the outline, or closes
    * it; `open` says which, and without it the panel flips.
+   * `pick`: the centred box of the quick switcher, for a choice among `items` or, without them, a line of text.
+   * Resolves with the id of the item picked or the text typed, or with null when the box was closed.
    */
   ui: {
     registerState(read: () => Record<string, unknown>): void;
     registerRibbon(button: RibbonButton): void;
     registerPanel(panel: SidePanel): void;
     togglePanel(id: string, open?: boolean): void;
+    pick(request: PickRequest): Promise<string | null>;
   };
   /** `![[target]]` in Live Preview is drawn by `render` when the target, with or without `.md`, ends in `ext`. */
   markdown: { registerEmbed(ext: string, render: EmbedRenderer): void };
@@ -78,6 +81,18 @@ export interface RibbonButton {
   command: string;
   /** Drawn on the button's corner, e.g. a count. It draws nothing when there is nothing to say. */
   badge?: ComponentType;
+}
+
+/** What `AppApi.ui.pick` asks. */
+export interface PickRequest {
+  /** The box's placeholder and accessible name: "Insert template". */
+  label: string;
+  /** What Enter does, for the hint under the box: "insert". */
+  action: string;
+  /** The choices: `id` is what `pick` resolves with, `hint` muted text on the right (a folder). */
+  items?: { id: string; title: string; hint?: string }[];
+  /** Text the box starts with. */
+  initial?: string;
 }
 
 export interface SidePanel {
@@ -200,6 +215,12 @@ export const MODULES: Module[] = [
     deactivate: () => void import("./modules/capture").then((capture) => capture.deactivate()),
   },
   {
+    id: "templates",
+    title: "Templates: insert a note from the template folder",
+    defaultEnabled: false,
+    activate: async (app) => (await import("./modules/templates")).activate(app),
+  },
+  {
     id: "claims",
     title: "Claims: lines that name their evidence, and a queue to check them",
     defaultEnabled: false,
@@ -243,6 +264,8 @@ class Registry {
   onHide: (type: string) => void = () => {};
   /** Called when a module opens a note (`AppApi.notes.open`). The app sets this too. */
   onOpen: (path: string, line?: number) => void = () => {};
+  /** Called when a module asks the user to choose (`AppApi.ui.pick`). The app sets this to show the box. */
+  onPick: (request: PickRequest) => Promise<string | null> = async () => null;
 
   /** The app wrote a note the user edited: tells the modules that asked (`AppApi.notes.onSaved`). */
   saved(path: string, before: string, after: string) {
@@ -298,6 +321,7 @@ class Registry {
             undo.push(() => void (this.openPanel === panel.id && (this.openPanel = null)));
           },
           togglePanel: (id, open) => this.togglePanel(id, open),
+          pick: (request) => this.onPick(request),
         },
         markdown: { registerEmbed: (ext, render) => add(this.embeds, { ext, render }) },
         notes: {

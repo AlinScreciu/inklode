@@ -185,6 +185,19 @@
   --table-cell-padding: 6px 12px;
   --table-size: 0.9375em;
 
+  /* A note exported to PDF (src/print.ts): dark on white in both appearances, so greys made of black and white,
+     which a theme need not set, and the accent darkened until it reads on white. */
+  --print-text: color-mix(in srgb, black 90%, white);
+  --print-muted: color-mix(in srgb, black 62%, white);
+  --print-link: color-mix(in oklab, var(--accent) 70%, black);
+  --print-border: color-mix(in srgb, black 18%, white);
+  --print-code-bg: color-mix(in srgb, black 5%, white);
+  --print-size: 11pt;
+
+  /* A PDF in a pane: the surface behind its pages, and the shadow under each page. The pages stay white. */
+  --pdf-bg: var(--bg-sidebar);
+  --pdf-page-shadow: 0 1px 3px color-mix(in srgb, black 18%, transparent);
+
   /* Graph view. The canvas reads these, and again when the theme changes. */
   --graph-node: var(--text-muted);
   --graph-edge: var(--border);
@@ -1118,6 +1131,119 @@ kbd {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+/* A PDF (components/PdfView.tsx): a bar with the page count and the zoom, over the pages, which scroll. */
+.pdf-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--pdf-bg);
+}
+
+.pdf-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+.pdf-count {
+  margin-right: auto;
+}
+
+.pdf-zoom {
+  min-width: 3.5em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-pages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  /* `safe`: a page wider than the pane starts at its left edge, so it can be scrolled to whole. */
+  align-items: safe center;
+  gap: var(--pdf-gap);
+  padding: var(--pdf-gap);
+  outline: none;
+}
+
+.pdf-page {
+  position: relative;
+  flex: none;
+  background: white;
+  box-shadow: var(--pdf-page-shadow);
+}
+
+.pdf-page canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* pdf.js's text layer: the page's words, see-through over the canvas, so they can be selected. From pdf.js's
+   own viewer stylesheet (pdfjs-dist/web/pdf_viewer.css), cut down to what the layer needs. */
+.pdf-page .textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.pdf-page .textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.pdf-page .textLayer > :not(.markedContent),
+.pdf-page .textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.pdf-page .textLayer .markedContent {
+  display: contents;
+}
+
+.pdf-page .textLayer ::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: transparent;
+}
+
+/* pdf.js puts this at the end of the layer, so a drag past the last line still selects to the end. */
+.pdf-page .textLayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .start-list {
@@ -4446,4 +4572,158 @@ kbd {
 .editor .cm-editor .cm-tooltip-autocomplete .cm-completionMatchedText {
   color: var(--accent);
   text-decoration: none;
+}
+
+/* A note exported to PDF (src/print.ts): `.print-root` is under <body>, beside the app, and shows only in print,
+   alone. Paper margins are the print dialog's; the sizes of headings are the theme's. */
+.print-root {
+  display: none;
+}
+
+@media print {
+  html,
+  body,
+  #root {
+    height: auto;
+    overflow: visible;
+    background: white;
+  }
+
+  body > :not(.print-root) {
+    display: none !important;
+  }
+
+  .print-root {
+    display: block;
+    color: var(--print-text);
+    font: var(--print-size) / 1.55 var(--font-text);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-root :is(h1, h2, h3, h4, h5, h6) {
+    margin: 1.2em 0 0.4em;
+    line-height: var(--heading-line-height);
+    font-weight: var(--heading-weight);
+    break-after: avoid;
+  }
+
+  .print-root > :first-child {
+    margin-top: 0;
+  }
+
+  .print-root h1 {
+    font-size: var(--heading-1-size);
+    font-weight: var(--heading-1-weight);
+  }
+
+  .print-root h2 {
+    font-size: var(--heading-2-size);
+  }
+
+  .print-root h3 {
+    font-size: var(--heading-3-size);
+  }
+
+  .print-root h4 {
+    font-size: var(--heading-4-size);
+  }
+
+  .print-root h5 {
+    font-size: var(--heading-5-size);
+  }
+
+  .print-root h6 {
+    font-size: var(--heading-6-size);
+    color: var(--print-muted);
+  }
+
+  .print-root :is(p, ul, ol, blockquote, pre, table) {
+    margin: 0 0 0.8em;
+  }
+
+  .print-root li > p {
+    margin: 0;
+  }
+
+  .print-root :is(ul, ol) {
+    padding-left: 1.6em;
+  }
+
+  .print-root li.print-task {
+    list-style: none;
+  }
+
+  .print-root li.print-task > p > input {
+    margin: 0 0.3em 0 -1.3em;
+    vertical-align: -0.1em;
+  }
+
+  .print-root li.print-task.is-done > p {
+    color: var(--print-muted);
+  }
+
+  .print-root :is(a, .link) {
+    color: var(--print-link);
+    text-decoration: none;
+  }
+
+  .print-root code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background: var(--print-code-bg);
+    border-radius: 3px;
+    padding: 0.1em 0.3em;
+  }
+
+  .print-root pre {
+    background: var(--print-code-bg);
+    border-radius: 4px;
+    padding: 0.8em 1em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    break-inside: avoid;
+  }
+
+  .print-root pre code {
+    padding: 0;
+    background: none;
+  }
+
+  .print-root blockquote {
+    margin-left: 0;
+    padding-left: 1em;
+    border-left: 3px solid var(--print-border);
+    color: var(--print-muted);
+  }
+
+  .print-root hr {
+    border: none;
+    border-top: 1px solid var(--print-border);
+    margin: 1.5em 0;
+  }
+
+  .print-root table {
+    border-collapse: collapse;
+    font-size: 0.95em;
+  }
+
+  .print-root :is(th, td) {
+    border: 1px solid var(--print-border);
+    padding: 0.3em 0.7em;
+    text-align: left;
+  }
+
+  .print-root th {
+    background: var(--print-code-bg);
+  }
+
+  .print-root tr,
+  .print-root img {
+    break-inside: avoid;
+  }
+
+  .print-root img {
+    max-width: 100%;
+  }
 }

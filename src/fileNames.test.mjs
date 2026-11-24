@@ -1,7 +1,7 @@
 // Self-check for fileNames.ts, run by `pnpm test:shell` (plain Node, which strips the types on import).
 
 import assert from "node:assert/strict";
-import { isImage, keptExtension, renameInitial, renameTarget } from "./fileNames.ts";
+import { isDrawn, isImage, isPdf, keptExtension, renameInitial, renameTarget } from "./fileNames.ts";
 
 assert.equal(keptExtension("a/Note.md"), ".md");
 assert.equal(keptExtension("Note.MD"), ".MD");
@@ -38,5 +38,8 @@ for (const path of ["a/Note.md", "a/Plan.excalidraw.md", "img/pic.png", "LICENSE
 
 assert.ok(isImage("a/pic.PNG") && isImage("x.jpeg") && isImage("x.svg"));
 assert.ok(!isImage("doc.pdf") && !isImage("Note.md") && !isImage("png"));
+
+assert.ok(isPdf("a/Doc.PDF") && !isPdf("pdf") && !isPdf("x.pdf.md"));
+assert.ok(isDrawn("x.png") && isDrawn("x.pdf") && !isDrawn("x.md"));
 
 console.log("file names: ok");

@@ -1,7 +1,7 @@
 // The look options of a vault: keys in `.inklode/settings.json` next to `theme`, set with the command
 // `settings.set {key, value}`. A key that is absent (or set to null) means the default: what the theme says.
 // The ones that are set go on <html> as inline CSS variables, so they win over the theme and the snippets.
-// `defaultMode` and `historyDiff` are kept here too: not looks, but options of the same kind.
+// `defaultMode`, `historyDiff` and `templateFolder` are kept here too: not looks, but options of the same kind.
 
 import type { EditorMode } from "./workspace.ts";
 
@@ -24,6 +24,8 @@ export interface Options {
   defaultMode: EditorMode;
   /** Where the history panel shows what changed since the picked version: under its list, or in a pane beside the note. */
   historyDiff: "sidebar" | "pane";
+  /** The folder the templates module lists its templates from, as a vault path. Null is `_templates`. */
+  templateFolder: string | null;
 }
 
 export const DEFAULT_OPTIONS: Options = {
@@ -35,6 +37,7 @@ export const DEFAULT_OPTIONS: Options = {
   lineWidth: null,
   defaultMode: "live-preview",
   historyDiff: "sidebar",
+  templateFolder: null,
 };
 
 const oneOf =
@@ -43,6 +46,9 @@ const oneOf =
     allowed.includes(value as string);
 const between = (min: number, max: number) => (value: unknown) =>
   typeof value === "number" && value >= min && value <= max;
+/** A folder of the vault, written as a path from its root: no empty part, none that starts with a dot, no `\\`. */
+const vaultFolder = (value: unknown) =>
+  typeof value === "string" && value.split("/").every((part) => part.trim() !== "" && !part.startsWith(".") && !part.includes("\\"));
 // No `;` or braces: the text goes into a style declaration.
 const cssText = (value: unknown) => typeof value === "string" && value.trim() !== "" && !/[;{}]/.test(value);
 
@@ -56,6 +62,7 @@ const VALID: Record<keyof Options, { ok(value: unknown): boolean; expects: strin
   lineWidth: { ok: between(20, 120), expects: "a number from 20 to 120 (rem)" },
   defaultMode: { ok: oneOf("live-preview", "source", "reading"), expects: '"live-preview", "source" or "reading"' },
   historyDiff: { ok: oneOf("sidebar", "pane"), expects: '"sidebar" or "pane"' },
+  templateFolder: { ok: vaultFolder, expects: "a folder of the vault, written from its root without a slash at either end, e.g. _templates" },
 };
 
 export const OPTION_KEYS = Object.keys(VALID) as (keyof Options)[];
