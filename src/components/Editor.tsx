@@ -186,7 +186,7 @@ export function Editor({ ref, path, content, vaultRoot, sourceMode, jump, restor
       },
       version,
       // A failed lookup leaves the link looking normal.
-      (target) => call<{ path: string | null }>("note.resolve", { link: target, from: path }).then((found) => found.path !== null, () => true),
+      (target) => call<{ path: string | null }>("note.resolve", { link: target, from: path, files: true }).then((found) => found.path !== null, () => true),
     ),
   ];
 

@@ -36,8 +36,10 @@
     "test:merge": "node src/modules/merge/merge3.test.mjs",
     "test:review": "node src/modules/review/inbox.test.mjs",
     "test:shell": "node src/commands.test.mjs && node src/appearance.test.mjs && node src/history.test.mjs && node src/workspace.test.mjs && node src/textDiff.test.mjs && node src/saves.test.mjs && node src/fileNames.test.mjs",
+    "test:pdf": "node src/components/pdfScale.test.mjs && node src/components/noteRender.test.mjs",
     "test:tables": "node src/modules/tables/table.test.mjs",
     "test:tasks": "node src/modules/tasks/tasks.test.mjs",
+    "test:templates": "node src/modules/templates/template.test.mjs",
     "test:themes": "node src/themes/themes.test.mjs",
     "tauri": "tauri"
   },
@@ -59,6 +61,7 @@
     "@tauri-apps/plugin-updater": "^2.14.1",
     "d3-force": "3.0.1",
     "lucide-react": "1.73.0",
+    "pdfjs-dist": "6.5.438",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

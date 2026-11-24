@@ -9,6 +9,11 @@ The other npm and Cargo dependencies are linked, not adapted, and carry their li
 - Used for: the icons in the app's UI, through the npm package `lucide-react`, bundled unchanged.
 - Source: <https://github.com/lucide-icons/lucide>. ISC License, Copyright (c) Lucide Icons and Contributors; some icons derive from Feather, MIT License, Copyright (c) 2013-present Cole Bemis. The full text is `node_modules/lucide-react/LICENSE`.
 
+## PDF.js
+
+- Used for: showing PDFs in a tab, through the npm package `pdfjs-dist` (its legacy build and worker), bundled unchanged. The styles of the text layer over a page in `src/app.css` (`.pdf-page .textLayer`) are cut down from its viewer stylesheet, `pdfjs-dist/web/pdf_viewer.css`.
+- Source: <https://github.com/mozilla/pdf.js>. Apache License 2.0, Copyright Mozilla Foundation and contributors. The full text is `node_modules/pdfjs-dist/LICENSE`.
+
 ## Catppuccin
 
 - Used for: the built-in themes `src/themes/Catppuccin.css`, `Catppuccin Frappé.css` and `Catppuccin Macchiato.css`. They are ports to Inklode's CSS variables: the colours are the Catppuccin palette, and the choice of which colour goes where follows Catppuccin for Obsidian. No rule of the original stylesheet is copied.

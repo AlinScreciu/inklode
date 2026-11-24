@@ -325,6 +325,9 @@ export function Settings({ config, app, vaultRoot, section, onSection, onClose }
               ))}
             </div>
           </Row>
+          <Row title="Template folder" hint="Where the Templates module (under Modules) finds the notes it offers as templates. A path from the vault's root.">
+            <Field label="Template folder" value={options.templateFolder} placeholder="_templates" onChange={(v) => set("templateFolder", v)} />
+          </Row>
         </>
       ) : (
         needsVault("set up its editor")

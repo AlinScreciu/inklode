@@ -4,7 +4,7 @@ A vault keeps its own look and keys in its `.inklode` folder. The app reads thes
 
 | File | What |
 |---|---|
-| `.inklode/settings.json` | `{"theme": "Sepia", "snippets": ["Wide lines"], "modules": {"excalidraw": true}}`. `theme` is a name from `themes/` or `null`; `snippets` are the names switched on, applied in this order; `modules` is described in [modules.md](modules.md). |
+| `.inklode/settings.json` | `{"theme": "Sepia", "snippets": ["Wide lines"], "modules": {"excalidraw": true}}`. `theme` is a name from `themes/` or `null`; `snippets` are the names switched on, applied in this order; `modules` is described in [modules.md](modules.md). The look and editor options sit next to them (`src/appearance.ts` has the list): `appearance`, `accent`, `uiFontSize`, `textFont`, `textFontSize`, `lineWidth`, `defaultMode`, `historyDiff`, and `templateFolder`, the folder the Templates module takes its templates from (`_templates` when left out). |
 | `.inklode/keys.json` | `{"note.switch": "Mod+K", "note.save": null}`. Command id to key; `null` means no key. Commands not listed keep their default. `command_list` gives the ids. A key set here must have `Mod` (Cmd on macOS, Ctrl elsewhere) or `Alt` in it, or be a function key (`F1` to `F24`, also with Shift): `X`, `Shift+X`, `Enter` or `Escape` is ignored, the command keeps its default, and Settings says so on the command's row. `key.set` refuses such a key. |
 | `.inklode/themes/<name>.css` | A theme. One is in use at a time. |
 | `.inklode/snippets/<name>.css` | A snippet: a small CSS change, each switched on separately, applied after the theme. |

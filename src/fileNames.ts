@@ -1,4 +1,4 @@
-// What the app reads from a file's name: the extension a rename keeps, and whether the file is a picture.
+// What the app reads from a file's name: the extension a rename keeps, and whether the file is a picture or a PDF.
 // Pure functions over paths: no React and no DOM (self-check: fileNames.test.mjs).
 
 /**
@@ -37,3 +37,9 @@ export function renameTarget(from: string, input: string): string {
 
 /** Whether the app shows the file as a picture, by its extension: the kinds the window can draw in an `<img>`. */
 export const isImage = (path: string) => /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(path);
+
+/** Whether the app shows the file as a PDF, by its extension. */
+export const isPdf = (path: string) => /\.pdf$/i.test(path);
+
+/** Whether the app draws the file from its bytes and never reads it as text: a picture or a PDF. */
+export const isDrawn = (path: string) => isImage(path) || isPdf(path);

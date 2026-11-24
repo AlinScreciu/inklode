@@ -14,6 +14,12 @@ assert.doesNotThrow(() => checkOption("textFontSize", 18));
 assert.throws(() => checkOption("textFontSize", "18"), /10 to 32/);
 assert.throws(() => checkOption("textFont", "x; } body { display: none"), /font family/);
 assert.throws(() => checkOption("theme", "x"), /Unknown setting/);
+// The template folder is a vault path: nested is fine, a dot part or a slash at an end is not.
+assert.doesNotThrow(() => checkOption("templateFolder", "Meta/templates"));
+for (const bad of ["", "/_templates", "_templates/", ".obsidian/templates", "a//b", 3]) {
+  assert.throws(() => checkOption("templateFolder", bad), /folder of the vault/);
+}
+assert.equal(readOptions({ templateFolder: ".git" }).templateFolder, null);
 
 // Colours.
 assert.deepEqual(hexRgb("#fff"), [255, 255, 255]);

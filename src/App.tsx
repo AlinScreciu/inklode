@@ -13,15 +13,16 @@ import { Settings, SETTINGS_SECTIONS, type SettingsSection } from "./components/
 import { countText, fileActions, folderActions, Ribbon, SidebarActions, Welcome } from "./components/Shell";
 import { UpdateNotice, useUpdates } from "./components/Updates";
 import { drag, Outline, Panes, SidePanel, tabTitle, viewOf, type PaneHost } from "./components/Workspace";
-import { isImage, renameInitial, renameTarget } from "./fileNames";
+import { isDrawn, isImage, isPdf, renameInitial, renameTarget } from "./fileNames";
 import { loadConfig, NO_CONFIG, setKey, setOption, setTheme, toggleModule, toggleSnippet } from "./config";
 import * as nav from "./history";
-import { modules, type ViewHandle } from "./modules";
+import { modules, type PickRequest, type ViewHandle } from "./modules";
 import { Saves, type Issue } from "./saves";
 import * as W from "./workspace";
 import {
   appSettingsGet,
   appSettingsSet,
+  assetUrl,
   mcpCopy,
   mcpTokenNew,
   call,
@@ -55,6 +56,8 @@ type Dialog =
   | { kind: "new" | "rename" | "delete"; arg: string }
   // The same three for a folder, and the list of folders to move a file or folder (`arg`) into.
   | { kind: "newFolder" | "renameFolder" | "deleteFolder" | "move"; arg: string }
+  // A module's question (`AppApi.ui.pick`), and what gets the answer: null when the box goes without a pick.
+  | { kind: "pick"; request: PickRequest; answer(value: string | null): void; id: number }
   | null;
 
 /** How long after the last keystroke an edited note is written to disk. */
@@ -465,9 +468,9 @@ export default function App() {
       await save();
       const { gen } = saves.current;
       const stamp = saves.current.stamp(path);
-      // A picture is not read: its pane draws it from the file. Any other file that is not text opens too, and
-      // its pane says that it cannot be shown. Only a file that cannot be read at all is an error.
-      const content = isImage(path)
+      // A picture or a PDF is not read as text: its pane draws it from the file. Any other file that is not text
+      // opens too, and its pane says that it cannot be shown. Only a file that cannot be read at all is an error.
+      const content = isDrawn(path)
         ? null
         : await call<{ content: string }>("note.read", { path }).then(
             (read) => read.content,
@@ -479,7 +482,7 @@ export default function App() {
       // Another vault was opened meanwhile: this text is not of it.
       if (gen !== saves.current.gen) return;
       apply((w) => (newTab ? W.addTab(w, path) : W.open(w, path, step)));
-      if (content === null) setNoText((all) => (all.has(path) || isImage(path) ? all : new Set(all).add(path)));
+      if (content === null) setNoText((all) => (all.has(path) || isDrawn(path) ? all : new Set(all).add(path)));
       else seen(path, content, stamp, true);
       setJump(line ? { tab: W.tab(ws.current).id, line } : null);
       // The folders the note is in open, so it shows in the tree.
@@ -496,6 +499,17 @@ export default function App() {
   );
   // A module opens a note, e.g. from a list in its panel (`AppApi.notes.open`).
   modules.onOpen = openNote;
+  // A module asks the user to choose, e.g. a template (`AppApi.ui.pick`).
+  // `id` counts the questions, so the box of one does not keep what was typed in the one before.
+  const picks = useRef(0);
+  modules.onPick = (request) => new Promise((answer) => setDialog({ kind: "pick", request, answer, id: ++picks.current }));
+  // A question that leaves the screen unanswered (closed, or another box took its place) is answered with null.
+  // After a pick that does nothing: a promise takes the first answer only.
+  useEffect(() => {
+    if (dialog?.kind !== "pick") return;
+    const asked = dialog;
+    return () => asked.answer(null);
+  }, [dialog]);
 
   /**
    * A change to the panes and tabs that is not opening a note. What is waiting is saved first, as when
@@ -535,7 +549,7 @@ export default function App() {
     saves.current.prune([...visible, ...W.panes(ws.current).flatMap((p) => W.shown(p).path ?? [])]);
     showIssues();
     for (const path of visible) {
-      if (path in disk || reading.current.has(path) || isImage(path) || noText.has(path)) continue;
+      if (path in disk || reading.current.has(path) || isDrawn(path) || noText.has(path)) continue;
       reading.current.add(path);
       const { gen } = saves.current;
       let stamp = 0;
@@ -663,7 +677,7 @@ export default function App() {
     async (link: string, newTab = false) => {
       const from = openPath();
       if (!from) return;
-      const { path } = await call<{ path: string | null }>("note.resolve", { link, from });
+      const { path } = await call<{ path: string | null }>("note.resolve", { link, from, files: true });
       if (path) await openNote(path, undefined, newTab);
       else setError(`No note named ${link.split(/[#|]/)[0].trim()}`);
     },
@@ -1000,6 +1014,23 @@ export default function App() {
         run: (params) => {
           if (!vault) throw new Error("Open a vault first");
           return copyText(`${vault.root}/${target(params, "copy the path of")}`);
+        },
+      },
+      {
+        id: "note.exportPdf",
+        title: "Export note to PDF…",
+        // `{path?}`: the open note if left out. Opens the system's print dialog on the note alone, rendered on
+        // white without the app around it (src/print.ts); "Save as PDF" in its PDF menu writes the file.
+        run: async (params) => {
+          if (!vault) throw new Error("Open a vault first");
+          const path = target(params, "export");
+          if (!/\.md$/i.test(path) || modules.viewFor(path)) throw new Error("Only a note can be exported to PDF");
+          const text =
+            [...editors.current.values()].find((editor) => editor.path === path)?.handle.snapshot()?.text ??
+            saves.current.text(path) ??
+            (await call<{ content: string }>("note.read", { path })).content;
+          const { printNote } = await import("./print");
+          await printNote(path, text, (file) => assetUrl(vault.root, file));
         },
       },
       {
@@ -1393,6 +1424,7 @@ export default function App() {
       if (t.page && modules.view(t.page)) return t.page;
       if (!t.path) return null;
       if (isImage(t.path)) return "image";
+      if (isPdf(t.path)) return "pdf";
       if (noText.has(t.path)) return "file";
       return (text === undefined ? modules.viewFor(t.path) : viewOf(t.path, text).view)?.type ?? "markdown";
     };
@@ -1412,7 +1444,7 @@ export default function App() {
       vault: vault?.name ?? null,
       vaultRoot: vault?.root ?? null,
       note,
-      // What the active tab shows: "markdown" is the editor, "image" a picture, "file" a file that is not text
+      // What the active tab shows: "markdown" is the editor, "image" a picture, "pdf" a PDF, "file" a file that is not text
       // (the pane says it cannot be shown), anything else a module's view: "excalidraw" for a drawing, "graph"
       // for the graph, which covers the note.
       view,
@@ -1455,6 +1487,15 @@ export default function App() {
       // transitioning, build, presenter}`, `index` from 0.
       drawing: null,
       slideshow: null,
+      // While the active tab shows a PDF: `{pages, zoom, fit, drawn}`, `zoom` 1 being 100%, `fit` whether it follows
+      // the pane's width, `drawn` the numbers of the pages that have a canvas now (those near the view).
+      pdf: ((el) =>
+        el && {
+          pages: Number(el.dataset.pages),
+          zoom: Number(el.dataset.zoom),
+          fit: el.dataset.fit === "true",
+          drawn: el.dataset.drawn ? el.dataset.drawn.split(",").map(Number) : [],
+        })(document.querySelector<HTMLElement>(".pane.is-active .pdf-view")),
       // From the graph view: `{nodes, edges, kinds, filter, hovered, zoom, labels, settled, options, optionsOpen}`
       // (`uiState` in modules/graph/canvas.ts has every field).
       graph: null,
@@ -1493,10 +1534,11 @@ export default function App() {
       searchOpen: vault !== null && sidebarOpen && searching,
       searchQuery: document.querySelector<HTMLInputElement>(".search-input")?.value ?? null,
       // Which centred box is open: "commands" is the palette, "settings" the settings screen, "delete" the question
-      // before a delete, the others are the switcher and the text prompts. `dialogArg`: the path "rename" and "delete" are about.
+      // before a delete, "pick" a module's question (its label is `dialogArg`), the others are the switcher and the
+      // text prompts. `dialogArg`: the path "rename" and "delete" are about.
       // "discard" is the question before unsaved text is given up; it is over the others.
       dialog: asking ? "discard" : (dialog?.kind ?? null),
-      dialogArg: dialog && "arg" in dialog ? dialog.arg : null,
+      dialogArg: dialog && "arg" in dialog ? dialog.arg : dialog?.kind === "pick" ? dialog.request.label : null,
       // The section the settings screen shows, or would show.
       settingsSection,
       // The popup menu that is open (a context menu, a "more" menu, a select's list): its name and item labels.
@@ -1600,6 +1642,17 @@ export default function App() {
             };
           })}
           onPick={(path) => void openNote(path)}
+          onClose={closeDialog}
+        />
+      )}
+      {dialog?.kind === "pick" && (
+        <Palette
+          key={dialog.id}
+          label={dialog.request.label}
+          action={dialog.request.action}
+          items={dialog.request.items}
+          initial={dialog.request.initial}
+          onPick={(value) => dialog.answer(value)}
           onClose={closeDialog}
         />
       )}

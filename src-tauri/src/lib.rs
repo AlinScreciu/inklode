@@ -114,6 +114,41 @@ fn presenter_close(window: tauri::WebviewWindow) -> Result<(), String> {
     }
 }
 
+/// Opens the system's print dialog on the main window's page, for "Export to PDF" (src/print.ts), whose print
+/// styles show only the note. Tauri's own `print` sets the paper's margins to nothing, so the text would touch
+/// the edge of every page; here each margin is `PRINT_MARGIN`, which the dialog can still change.
+#[tauri::command]
+fn print_page(window: tauri::WebviewWindow) -> Result<(), String> {
+    main_only(&window)?;
+    #[cfg(target_os = "macos")]
+    return window
+        .with_webview(|webview| {
+            use objc2_app_kit::NSPrintInfo;
+            use objc2_web_kit::WKWebView;
+            /// 18 mm, in points.
+            const PRINT_MARGIN: f64 = 51.0;
+            let info = NSPrintInfo::sharedPrintInfo();
+            info.setTopMargin(PRINT_MARGIN);
+            info.setBottomMargin(PRINT_MARGIN);
+            info.setLeftMargin(PRINT_MARGIN);
+            info.setRightMargin(PRINT_MARGIN);
+            // SAFETY: on macOS `inner` is the window's WKWebView, and this closure runs on the main thread. The
+            // print operation runs as a sheet on the window, with no delegate.
+            unsafe {
+                let view: &WKWebView = &*webview.inner().cast();
+                let operation = view.printOperationWithPrintInfo(&info);
+                // The page is laid out for print on another thread, so the window keeps answering.
+                operation.setCanSpawnSeparateThread(true);
+                if let Some(on) = view.window() {
+                    operation.runOperationModalForWindow_delegate_didRunSelector_contextInfo(&on, None, None, std::ptr::null_mut());
+                }
+            }
+        })
+        .map_err(|e| e.to_string());
+    #[cfg(not(target_os = "macos"))]
+    window.print().map_err(|e| e.to_string())
+}
+
 /// Ends the app. The UI calls it from its `app.quit` command, after it wrote what was unsaved.
 #[tauri::command]
 fn app_quit(window: tauri::WebviewWindow) -> Result<(), String> {
@@ -250,6 +285,7 @@ pub fn run() {
             mcp::mcp_token_new,
             presenter_open,
             presenter_close,
+            print_page,
             capture::capture_enable,
             capture::capture_open,
             capture::capture_done,

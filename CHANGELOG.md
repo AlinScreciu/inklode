@@ -5,6 +5,9 @@
 New:
 
 - Paste an image into a note: a screenshot or an image on the clipboard is saved at the vault root as `Pasted image <date and time>.png` and linked with `![[…]]` where the cursor is, as Obsidian does.
+- Templates, a module like Obsidian's core Templates plugin (off until you switch it on under Settings > Modules). "Insert template" puts a note from the template folder at the cursor, and "New note from template" starts a note from one. `{{title}}`, `{{date}}`, `{{time}}` and `{{date:YYYY-MM-DD}}`-style formats are filled in, and the template's frontmatter is merged into the note's. The folder is `_templates` unless Settings > Editor > Template folder names another.
+- PDFs open in a tab, from the file tree or a `[[link]]`: every page, with zoom and text you can select and copy.
+- Export a note to PDF: "Export note to PDF…" in the palette or the note's "…" menu opens the print dialog on the note alone, on white, with its images; "Save as PDF" in the dialog's PDF menu writes the file.
 
 ## 0.3.1
 

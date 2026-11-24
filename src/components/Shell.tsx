@@ -12,6 +12,7 @@ import {
   Command,
   Copy,
   Ellipsis,
+  FileDown,
   FileSearch,
   FolderInput,
   FolderSearch,
@@ -220,6 +221,8 @@ export function PaneHeader({ path, title, canBack, canForward, mode, canClose, o
           items={[
             ...paneActions(canClose),
             "separator",
+            // A note in the editor can be exported; a drawing or a picture cannot.
+            ...(mode ? [{ label: "Export to PDF…", icon: FileDown, onPick: () => void commands.run("note.exportPdf", { path }) }, "separator" as const] : []),
             ...(graph
               ? [{ label: graph.title, icon: Waypoints, shortcut: graph.key, onPick: () => void commands.run("graph.open") }, "separator" as const]
               : []),

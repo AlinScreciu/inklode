@@ -200,6 +200,26 @@ The strip of tabs is on the sidebar's layer and the tab that shows is on the not
 | `--table-cell-padding` | `6px 12px` | Padding of a cell. |
 | `--table-size` | `0.9375em` | Text size in tables. |
 
+### PDFs
+
+| Variable | Default | What it is |
+|---|---|---|
+| `--pdf-bg` | `→ bg-sidebar` | The surface behind the pages of a PDF. The pages themselves stay white. |
+| `--pdf-page-shadow` | a soft shadow | The shadow under each page. |
+
+### Export to PDF
+
+A note exported to PDF is dark on white in both appearances. A theme need not set these.
+
+| Variable | Default | What it is |
+|---|---|---|
+| `--print-text` | 90% black | The text. |
+| `--print-muted` | 62% black | Quotes, done tasks, level 6 headings. |
+| `--print-link` | `--accent` with 30% black | Links. |
+| `--print-border` | 18% black | Table borders, rules, the bar of a quote. |
+| `--print-code-bg` | 5% black | Behind code and table headers. |
+| `--print-size` | `11pt` | The text size. Headings are `--heading-*-size` of it. |
+
 ### Graph view
 
 The canvas reads these, and again when the theme changes.

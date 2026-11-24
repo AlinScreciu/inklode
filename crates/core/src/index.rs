@@ -334,7 +334,7 @@ impl Index {
     }
 
     /// The note a link points to, or else the file it embeds.
-    fn file_of(&self, link: &str, from: &str) -> Option<&str> {
+    pub(crate) fn file_of(&self, link: &str, from: &str) -> Option<&str> {
         self.resolve(link, from).or_else(|| self.file(link, from))
     }
 

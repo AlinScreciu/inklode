@@ -390,6 +390,12 @@ export function mockCall(name: string, params: Record<string, unknown>): unknown
       changed(path);
       return null;
     }
+    case "attachment.read": {
+      // The mock vault holds text only: a file's bytes are its text as UTF-8.
+      const file = notePath(path);
+      if (!files.has(file)) throw new Error(`not found: ${file}`);
+      return { data: btoa(String.fromCharCode(...new TextEncoder().encode(files.get(file)))) };
+    }
     case "note.resolve":
       return { path: resolve(params.link as string, params.from as string) };
     case "note.backlinks":

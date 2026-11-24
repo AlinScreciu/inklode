@@ -6,7 +6,7 @@ import { CopyX, Plus, X } from "lucide-react";
 import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { commands } from "../commands";
 import { assetUrl } from "../core/client";
-import { isImage } from "../fileNames";
+import { isImage, isPdf } from "../fileNames";
 import * as nav from "../history";
 import { modules, type ViewFactory, type ViewHandle } from "../modules";
 import type { Issue } from "../saves";
@@ -14,6 +14,7 @@ import * as W from "../workspace";
 import { Editor, type EditorHandle, type EditorPosition, type Heading } from "./Editor";
 import { Backlinks, useBacklinks } from "./Hits";
 import { Menu, type MenuAt } from "./Menu";
+import { PdfView } from "./PdfView";
 import { CommandButton, EmptyPane, PaneHeader, paneActions, StatusBar } from "./Shell";
 
 /** A pane is never dragged narrower or lower than this, in px. */
@@ -269,10 +270,17 @@ function SaveIssue({ path, issue, host }: { path: string; issue: Issue; host: Pa
 }
 
 /**
- * What a pane shows for a file that is not text. A picture (`isImage`) is drawn, as large as fits. Any other
- * file, and a picture the window cannot draw, gets a line that says so and a button that shows it in Finder.
+ * What a pane shows for a file that is not text. A picture (`isImage`) is drawn, as large as fits, and a PDF
+ * page by page (PdfView.tsx). Any other file, and a picture the window cannot draw, gets a line that says so
+ * and a button that shows it in Finder.
  */
 function Attachment({ path, vaultRoot }: { path: string; vaultRoot: string }) {
+  if (isPdf(path)) return <PdfView path={path} />;
+  return <Picture path={path} vaultRoot={vaultRoot} />;
+}
+
+/** A picture, as large as fits, or why it cannot be drawn. */
+function Picture({ path, vaultRoot }: { path: string; vaultRoot: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(!isImage(path));
   useEffect(() => {
@@ -316,8 +324,8 @@ export function Pane({ pane, active, canClose, size, disk, noText, issues, count
   const { id, path } = tab;
   const paged = tab.page ? modules.view(tab.page) : undefined;
   const text = path === null ? undefined : disk[path];
-  // A file the editor cannot show: a picture, or one that could not be read as text.
-  const attachment = path !== null && !paged && (isImage(path) || noText.has(path));
+  // A file the editor cannot show: a picture, a PDF, or one that could not be read as text.
+  const attachment = path !== null && !paged && (isImage(path) || isPdf(path) || noText.has(path));
   const { view: custom, problem } = useMemo(
     () => (path !== null && text !== undefined ? viewOf(path, text) : {}),
     // `moduleVersion`: what `viewOf` answers changes with it.
