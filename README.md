@@ -30,7 +30,7 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md). The details of the cl
 ### Core
 
 - Opens any folder of `.md` files as a vault. Notes stay plain files; the app keeps its own files in `.inklode/` inside the vault and leaves other dot folders (`.git`, `.obsidian`) alone.
-- Editor with Live Preview and a source mode (`Mod+E`), on CodeMirror 6: GitHub-flavoured Markdown, frontmatter shown as a properties block, images (paste one from the clipboard with `Mod+V`), task checkboxes, find and replace in a note (`Mod+F`), bold (`Mod+B`), italic (`Mod+I`) and a Markdown link (`Mod+K`). `Mod` is Cmd on macOS and Ctrl elsewhere.
+- Editor with Live Preview, a source mode (`Mod+E`) and a read-only reading view (`Mod+Shift+E`), on CodeMirror 6: GitHub-flavoured Markdown, frontmatter shown as a properties block, callouts (`> [!note]`, foldable with `-` or `+`), images (paste one from the clipboard with `Mod+V`), task checkboxes, find and replace in a note (`Mod+F`), bold (`Mod+B`), italic (`Mod+I`) and a Markdown link (`Mod+K`). `Mod` is Cmd on macOS and Ctrl elsewhere.
 - `[[Wikilinks]]` with aliases, heading links (`[[note#Heading]]`) and block links (`[[note#^id]]`) that open at their place, backlinks, and renames that rewrite the links that point to the moved note or folder. Typing `[[` suggests notes, `![[` any file, and `#` after a note's name its headings.
 - File tree, tabs, split panes, an outline, back and forward.
 - Quick switcher (`Mod+O`), command palette (`Mod+P`), search in all notes (`Mod+Shift+F`).

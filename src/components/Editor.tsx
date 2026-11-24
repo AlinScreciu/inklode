@@ -15,8 +15,9 @@ import { lineChanges, middle } from "../textDiff";
 import { notePaths, type Entry } from "./FileTree";
 import { eolOf, toLf, withEol } from "./lineEndings";
 import { headingsOf, linkQuery, suggestFiles } from "./linkSuggest";
-import { livePreview, markdownSyntax, noteName, titleLine } from "./livePreview";
+import { livePreview, markdownSyntax, noteName, readingOn, titleLine } from "./livePreview";
 import { imageExtension, pastedImageName } from "./pastedImage";
+import type { EditorMode } from "../workspace";
 
 export interface EditorHandle {
   /**
@@ -62,8 +63,8 @@ interface Props {
   content: string;
   /** Absolute path of the open vault, for loading images. */
   vaultRoot: string;
-  /** Plain Markdown source when true, Live Preview when false. */
-  sourceMode: boolean;
+  /** Live Preview, plain Markdown source, or the reading view: Live Preview that cannot be edited and never shows markup. */
+  mode: EditorMode;
   /** Where to put the cursor, 1-based. A new object jumps again, even to the same line. */
   jump?: { line: number };
   /** The cursor and scroll to start at: what `position()` gave when a tab was left. */
@@ -194,10 +195,10 @@ function codeLanguage(info: string) {
 }
 
 /**
- * Markdown editor for one note, in Live Preview or source mode. The parent gives it
+ * Markdown editor for one note, in Live Preview, source mode or the reading view. The parent gives it
  * `key={path}`, so each note gets a fresh editor with its own undo history.
  */
-export function Editor({ ref, path, content, vaultRoot, sourceMode, jump, restore, autoFocus, refresh, onChange, onMove }: Props) {
+export function Editor({ ref, path, content, vaultRoot, mode, jump, restore, autoFocus, refresh, onChange, onMove }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const latest = useRef({ onChange, onMove, autoFocus, refresh });
@@ -216,8 +217,8 @@ export function Editor({ ref, path, content, vaultRoot, sourceMode, jump, restor
   // The line ending the note has on disk (lineEndings.ts). The editor's document has "\n" only; every text that
   // leaves the editor (`onChange`, `snapshot`) has this one again, so an edit changes only the lines it touched.
   const eol = useRef(eolOf(content));
-  // Holds the Live Preview extension, or nothing in source mode.
-  const mode = useRef(new Compartment());
+  // Holds the Live Preview extension and, in the reading view, what makes the editor read-only. Nothing in source mode.
+  const rendering = useRef(new Compartment());
   // Holds the extensions of the modules that are on (`AppApi.editor.registerExtension`).
   const fromModules = useRef(new Compartment());
   // Counts changes between the light and the dark appearance: embeds are drawn in one of the two looks.
@@ -251,6 +252,14 @@ export function Editor({ ref, path, content, vaultRoot, sourceMode, jump, restor
       (target) => call<{ path: string | null }>("note.resolve", { link: target, from: path }).then((found) => found.path !== null, () => true),
     ),
   ];
+  // The reading view is Live Preview's own decorations, in an editor that takes no input and cannot get the
+  // focus, so no cursor reveals markup. Clicks on links still follow them (livePreview.ts).
+  const renderingFor = (editorMode: EditorMode, version: number) =>
+    editorMode === "source"
+      ? []
+      : editorMode === "reading"
+        ? [preview(version), EditorState.readOnly.of(true), EditorView.editable.of(false), readingOn.of(true)]
+        : preview(version);
 
   useEffect(() => {
     const doc = toLf(content);
@@ -270,7 +279,7 @@ export function Editor({ ref, path, content, vaultRoot, sourceMode, jump, restor
           syntaxHighlighting(classHighlighter),
           // classHighlighter has no class for strikethrough.
           syntaxHighlighting(tagHighlighter([{ tag: tags.strikethrough, class: "tok-strikethrough" }])),
-          mode.current.of(sourceMode ? [] : preview(refresh + look)),
+          rendering.current.of(renderingFor(mode, refresh + look)),
           notePath.of(path),
           fromModules.current.of(modules.editorExtension()),
           // Find and replace in this note: the panel sits on top of the pane. `note.find` (App.tsx) opens it too.
@@ -293,7 +302,7 @@ export function Editor({ ref, path, content, vaultRoot, sourceMode, jump, restor
             // linked where the cursor is. Text on the clipboard is left to CodeMirror.
             paste(event, v) {
               const image = [...(event.clipboardData?.files ?? [])].find((file) => imageExtension(file.type));
-              if (!image) return false;
+              if (!image || v.state.readOnly) return false;
               event.preventDefault();
               pasteImage(v, image).catch(commands.onError);
               return true;
@@ -326,11 +335,11 @@ export function Editor({ ref, path, content, vaultRoot, sourceMode, jump, restor
 
   useEffect(() => {
     view.current?.dispatch({
-      effects: [mode.current.reconfigure(sourceMode ? [] : preview(refresh + look)), fromModules.current.reconfigure(modules.editorExtension())],
+      effects: [rendering.current.reconfigure(renderingFor(mode, refresh + look)), fromModules.current.reconfigure(modules.editorExtension())],
     });
     // `preview` only uses `path` and `vaultRoot`, which are fixed for this instance.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceMode, refresh, look]);
+  }, [mode, refresh, look]);
 
   useEffect(() => {
     const editor = view.current;
@@ -414,5 +423,6 @@ export function Editor({ ref, path, content, vaultRoot, sourceMode, jump, restor
     [],
   );
 
-  return <div className={sourceMode ? "editor is-source" : "editor is-live-preview"} ref={host} />;
+  // The reading view is drawn as Live Preview, so it has that class too and themes style both alike.
+  return <div className={mode === "source" ? "editor is-source" : mode === "reading" ? "editor is-live-preview is-reading" : "editor is-live-preview"} ref={host} />;
 }

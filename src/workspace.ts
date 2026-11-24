@@ -10,6 +10,11 @@
 
 import * as nav from "./history.ts";
 
+/** How a note shows: Live Preview, the Markdown as typed, or rendered and read-only. */
+export type EditorMode = "live-preview" | "source" | "reading";
+
+const EDITOR_MODES: readonly string[] = ["live-preview", "source", "reading"] satisfies EditorMode[];
+
 export interface Tab {
   id: number;
   /** The note or drawing the tab shows, or null for an empty tab. */
@@ -18,8 +23,8 @@ export interface Tab {
   page: string | null;
   /** Back and Forward of this tab. */
   history: nav.History;
-  /** Source mode on or off, or null to follow the vault's default mode. */
-  source: boolean | null;
+  /** The editor mode of this tab, or null to follow the vault's default mode. */
+  mode: EditorMode | null;
 }
 
 export interface Pane {
@@ -50,7 +55,7 @@ export interface Workspace {
 // shortcut: only this many closed tabs can be reopened
 const MAX_CLOSED = 20;
 
-const emptyTab = (id: number): Tab => ({ id, path: null, page: null, history: nav.NO_HISTORY, source: null });
+const emptyTab = (id: number): Tab => ({ id, path: null, page: null, history: nav.NO_HISTORY, mode: null });
 
 /** One pane with one empty tab. */
 export const EMPTY: Workspace = {
@@ -123,11 +128,11 @@ export function hidePage(ws: Workspace, page: string): Workspace {
   return ws;
 }
 
-/** Source mode of the active tab: on, off, or null for the vault's default. */
-export const setSource = (ws: Workspace, source: boolean | null): Workspace => edit(ws, (t) => ({ ...t, source }));
+/** The editor mode of the active tab, or null for the vault's default. */
+export const setMode = (ws: Workspace, mode: EditorMode | null): Workspace => edit(ws, (t) => ({ ...t, mode }));
 
 /** Every tab follows the vault's default mode again. */
-export const resetSource = (ws: Workspace): Workspace => mapTabs(ws, (t) => (t.source === null ? t : { ...t, source: null }));
+export const resetMode = (ws: Workspace): Workspace => mapTabs(ws, (t) => (t.mode === null ? t : { ...t, mode: null }));
 
 /** Makes a pane the active one. */
 export const focus = (ws: Workspace, paneId: number): Workspace =>
@@ -307,7 +312,7 @@ export function restore(saved: unknown, exists: (path: string) => boolean): Work
                 path: (t.path as string | null) ?? null,
                 page: typeof t.page === "string" ? t.page : null,
                 history,
-                source: typeof t.source === "boolean" ? t.source : null,
+                mode: EDITOR_MODES.includes(t.mode as string) ? (t.mode as EditorMode) : null,
               };
             });
           if (p.id === from.active) active = id;

@@ -83,7 +83,7 @@ Known limits: every tick of the layout pushes every dot against every other (d3'
 
 ## Tables
 
-The `tables` module. In Live Preview a pipe table (header row, delimiter row, rows) shows as a table, with the columns aligned as the delimiter row says and the inline Markdown of its cells rendered. Source mode shows the text, and so does Live Preview with the module off.
+The `tables` module. In Live Preview a pipe table (header row, delimiter row, rows) shows as a table, with the columns aligned as the delimiter row says and the inline Markdown of its cells rendered. Source mode shows the text, and so does Live Preview with the module off. The reading view shows the table as Live Preview does, but its cells cannot be edited (a click on a link still follows it) and the commands refuse.
 
 - Click a cell to edit it; it then shows its raw Markdown. A click on a link in a cell that is not being edited follows the link. A typed `|` is written as `\|`, and a cell is always one line.
 - Keys in a cell: Tab and Shift+Tab go to the next and the previous cell, and Tab in the last cell adds a row. Enter goes down a row, and adds one at the end. The arrows left and right change cell when the caret is at that edge of the text, up and down change row, and leave the table from its first and last row. Escape leaves the cell for the line under the table. Undo and redo are the editor's.

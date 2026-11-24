@@ -8,6 +8,8 @@ New:
 - Link suggestions: typing `[[` lists the notes whose names match what you type, best match first, with the folder shown when two notes have the same name. `![[` lists every file, images included, and `[[note#` lists that note's headings (`[[#` this note's). Enter or Tab puts in the link with its closing `]]`.
 - Bold (Cmd+B), italic (Cmd+I) and link (Cmd+K) in the editor. Bold and italic wrap the selection or take the marks off it again; with nothing selected they put in the pair with the cursor between. Cmd+K makes `[text]()` from the selection, or `[](url)` from a selected URL. All three are in the command palette and can be rebound.
 - A heading link (`[[note#Heading]]`, `[[#Heading]]` in the same note) opens the note at that heading, and a block link (`[[note#^id]]`) at the line that ends in `^id`. Before, the note opened at the top.
+- Callouts, as Obsidian draws them: `> [!warning] Title` shows as a coloured box with an icon and the title, for every type Obsidian knows and its aliases (an unknown type looks like a note). `[!note]-` starts folded and `[!note]+` open; a click on the title folds or opens it. Themes can change the colours (`--callout-warning` and the others).
+- Reading view (`Mod+Shift+E`, or the eye button over the note): the note fully rendered and read-only, with links that still follow. The status bar says "Reading", and it can be a vault's default mode in Settings.
 
 ## 0.3.1
 

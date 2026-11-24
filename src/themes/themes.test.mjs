@@ -36,8 +36,10 @@ const cascade = (rules, appearance) => {
 // A colour the app writes out has to be set by a theme. One that the app derives (`var(--other)`, or a
 // `color-mix` of variables) follows the theme without being set.
 const writtenOut = (value) => /#[0-9a-f]{3,8}\b|\b(rgba?|hsla?)\(/i.test(value);
-// Black veils and shadows, which suit any theme of the same appearance.
+// Black veils and shadows, which suit any theme of the same appearance, and the callout colours: fixed hues
+// mixed with the theme's text, so a warning stays orange whatever the theme.
 const MAY_INHERIT = new Set(["--backdrop", "--shadow-popover", "--shadow-dialog"]);
+const mayInherit = (name) => MAY_INHERIT.has(name) || name.startsWith("--callout-");
 
 /** WCAG contrast ratio of two `#rrggbb` colours. */
 const contrast = (a, b) => {
@@ -66,7 +68,7 @@ for (const file of files) {
   for (const appearance of ["light", "dark"]) {
     const where = `${file} (${appearance})`;
     const required = [...cascade(appRules, appearance)]
-      .filter(([name, { value }]) => writtenOut(value) && !MAY_INHERIT.has(name))
+      .filter(([name, { value }]) => writtenOut(value) && !mayInherit(name))
       .map(([name]) => name);
     assert.ok(required.includes("--bg") && required.includes("--text"), "app.css :root was not parsed");
     colours = required.length;

@@ -6,7 +6,8 @@
 // The editor's cursor says which cell is meant: a cell that gets the focus puts the cursor at its
 // place in the text, so the commands and `ui_state` work the same in both modes.
 //
-// Classes, styled in app.css: `md-table-block` (the box), `md-table-tools` (its buttons),
+// Classes, styled in app.css: `md-table-block` (the box; `is-readonly` in the reading view, where cells
+// cannot be edited), `md-table-tools` (its buttons),
 // `md-table-scroll` (scrolls a wide table sideways), and a plain `table` with `th` and `td`.
 
 import { isolateHistory, redo, undo } from "@codemirror/commands";
@@ -72,7 +73,9 @@ function scan(state: EditorState): { tables: Found[]; decorations: DecorationSet
     const text = state.sliceDoc(start, end);
     return { from: start, to: end, text, table: parse(text) };
   });
-  const widgets = tables.map((t) => Decoration.replace({ widget: new TableWidget(t.text, t.table), block: true }).range(t.from, t.to));
+  const widgets = tables.map((t) =>
+    Decoration.replace({ widget: new TableWidget(t.text, t.table, !state.readOnly), block: true }).range(t.from, t.to),
+  );
   return { tables, decorations: state.facet(livePreviewOn) ? Decoration.set(widgets) : Decoration.none };
 }
 
@@ -304,12 +307,14 @@ class TableWidget extends WidgetType {
   constructor(
     readonly text: string,
     readonly table: Table,
+    /** False in the reading view: the cells cannot be edited and the toolbar does not show. */
+    readonly editable: boolean,
   ) {
     super();
   }
 
   eq(other: TableWidget) {
-    return other.text === this.text;
+    return other.text === this.text && other.editable === this.editable;
   }
 
   toDOM(view: EditorView) {
@@ -325,14 +330,14 @@ class TableWidget extends WidgetType {
     const grid = scroll.appendChild(document.createElement("table"));
     grid.createTHead().insertRow();
     grid.createTBody();
-    draw(box, this.table);
+    draw(box, this.table, this.editable);
     listen(box, view);
     return box;
   }
 
   // The same table with other text keeps its element, so the cell being edited keeps the focus and its caret.
   updateDOM(box: HTMLElement) {
-    draw(box, this.table);
+    draw(box, this.table, this.editable);
     return true;
   }
 
@@ -351,7 +356,8 @@ class TableWidget extends WidgetType {
 }
 
 /** Makes the element show `table`, changing only the rows and cells that differ from what it shows. */
-function draw(box: HTMLElement, table: Table) {
+function draw(box: HTMLElement, table: Table, editable: boolean) {
+  box.classList.toggle("is-readonly", !editable);
   const grid = box.querySelector("table")!;
   const body = grid.tBodies[0];
   const columns = columnCount(table);
@@ -360,10 +366,11 @@ function draw(box: HTMLElement, table: Table) {
   for (const row of Array.from(grid.rows)) {
     while (row.cells.length > columns) row.deleteCell(-1);
     while (row.cells.length < columns) {
-      const cell = row.appendChild(document.createElement(row.rowIndex === 0 ? "th" : "td"));
-      cell.contentEditable = "plaintext-only";
+      row.appendChild(document.createElement(row.rowIndex === 0 ? "th" : "td"));
     }
     for (const cell of Array.from(row.cells)) {
+      const want = editable ? "plaintext-only" : "false";
+      if (cell.contentEditable !== want) cell.contentEditable = want;
       // A row can have fewer cells than the table has columns. Those show empty.
       const raw = table.rows[row.rowIndex][cell.cellIndex] ?? "";
       const align = table.aligns[cell.cellIndex] ?? "none";
@@ -394,6 +401,7 @@ function listen(box: HTMLElement, view: EditorView) {
     event.preventDefault();
     const link = event.shiftKey || event.altKey ? null : target.closest<HTMLElement>("[data-link]");
     if (link) return void commands.run("link.follow", { link: link.dataset.link });
+    if (view.state.readOnly) return;
     // With the focus the cell turns into its raw text, so the caret is placed after that, at the pointer.
     cell.focus();
     const at = document.caretRangeFromPoint(event.clientX, event.clientY);

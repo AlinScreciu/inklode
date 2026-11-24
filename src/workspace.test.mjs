@@ -91,10 +91,12 @@ const stepped = W.removed(W.open(W.open(W.open(W.EMPTY, "a"), "b"), "c"), "c");
 assert.equal(show(stepped), ">b*");
 assert.deepEqual(W.tab(stepped).history, { stack: ["a", "b"], index: 1 });
 
-// Source mode is per tab; a page covers one tab.
-let s = W.setSource(W.split(W.open(W.EMPTY, "a"), "right"), true);
-assert.deepEqual(W.panes(s).map((p) => W.shown(p).source), [null, true]);
-assert.equal(W.tab(W.resetSource(s)).source, null);
+// The editor mode is per tab, and kept through a restore; a page covers one tab.
+let s = W.setMode(W.split(W.open(W.EMPTY, "a"), "right"), "reading");
+assert.deepEqual(W.panes(s).map((p) => W.shown(p).mode), [null, "reading"]);
+assert.equal(W.tab(W.resetMode(s)).mode, null);
+assert.equal(W.tab(W.restore(JSON.parse(JSON.stringify(s)), () => true)).mode, "reading");
+assert.equal(W.tab(W.restore(JSON.parse(JSON.stringify(W.setMode(s, "nonsense"))), () => true)).mode, null);
 s = W.showPage(s, "graph");
 assert.deepEqual(W.panes(s).map((p) => W.shown(p).page), [null, "graph"]);
 assert.equal(W.tab(W.open(s, "b")).page, null, "opening a note uncovers it");

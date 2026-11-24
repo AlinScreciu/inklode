@@ -144,6 +144,25 @@
   --blockquote-bar-width: 3px;
   --blockquote-indent: 16px;
   --blockquote-text: var(--syntax-quote);
+  /* Callouts (`> [!type]`): a colour per look, Obsidian's hues mixed with the theme's text, so a warning is
+     orange in every theme and reads in both appearances. Aliases share their type's colour (`tldr` is
+     abstract's). The box is the colour at `--callout-tint`. */
+  --callout-note: color-mix(in oklab, #086ddd 75%, var(--text));
+  --callout-abstract: color-mix(in oklab, #00bfbc 75%, var(--text));
+  --callout-info: var(--callout-note);
+  --callout-todo: var(--callout-note);
+  --callout-tip: var(--callout-abstract);
+  --callout-success: color-mix(in oklab, #08b94e 75%, var(--text));
+  --callout-question: color-mix(in oklab, #ec7500 75%, var(--text));
+  --callout-warning: var(--callout-question);
+  --callout-failure: color-mix(in oklab, #e93147 75%, var(--text));
+  --callout-danger: var(--callout-failure);
+  --callout-bug: var(--callout-failure);
+  --callout-example: color-mix(in oklab, #7852ee 75%, var(--text));
+  --callout-quote: color-mix(in oklab, #9e9e9e 75%, var(--text));
+  --callout-tint: 10%;
+  --callout-padding: 14px;
+  --callout-title-weight: 600;
   --rule-color: var(--border);
   --bullet-color: var(--text-muted);
   --bullet-size: 0.36em;
@@ -254,6 +273,8 @@
   --tooltip-text: var(--text);
   --syntax-code: #7cc4ba;
   --selection-blend: lighten;
+  /* A tint reads fainter on a dark surface. */
+  --callout-tint: 14%;
 }
 
 * {
@@ -1822,6 +1843,85 @@ kbd {
   --line-quote: var(--blockquote-indent);
   border-left: var(--blockquote-bar-width) solid var(--blockquote-bar);
   color: var(--blockquote-text);
+}
+
+/*
+ * Callouts: `md-callout` and `md-callout-<look>` on every line, `data-callout` with the type as written (an
+ * alias, or a type of the user's own). `md-callout-title` is the first line (`is-foldable`, `is-folded`, and
+ * `is-raw` while the cursor is in the callout and its markup shows), `md-callout-end` the last line that shows.
+ * The title starts with `md-callout-head` (the icon, `md-callout-icon`, and the type's name when there is no
+ * title) and a foldable one ends with `md-callout-fold`. A snippet gives a type of its own a colour with
+ * `.md-callout[data-callout="recipe"] { --callout-color: … }`.
+ */
+.md-callout-note { --callout-color: var(--callout-note); }
+.md-callout-abstract { --callout-color: var(--callout-abstract); }
+.md-callout-info { --callout-color: var(--callout-info); }
+.md-callout-todo { --callout-color: var(--callout-todo); }
+.md-callout-tip { --callout-color: var(--callout-tip); }
+.md-callout-success { --callout-color: var(--callout-success); }
+.md-callout-question { --callout-color: var(--callout-question); }
+.md-callout-warning { --callout-color: var(--callout-warning); }
+.md-callout-failure { --callout-color: var(--callout-failure); }
+.md-callout-danger { --callout-color: var(--callout-danger); }
+.md-callout-bug { --callout-color: var(--callout-bug); }
+.md-callout-example { --callout-color: var(--callout-example); }
+.md-callout-quote { --callout-color: var(--callout-quote); }
+
+.editor .cm-line.md-callout {
+  --line-quote: var(--callout-padding);
+  padding-right: var(--callout-padding);
+  background: color-mix(in srgb, var(--callout-color) var(--callout-tint), transparent);
+}
+
+.editor .cm-line.md-callout-title {
+  padding-top: calc(var(--callout-padding) * 0.6);
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+  color: var(--callout-color);
+  font-weight: var(--callout-title-weight);
+}
+
+.editor .cm-line.md-callout-end {
+  padding-bottom: calc(var(--callout-padding) * 0.6);
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+}
+
+.md-callout-title.is-foldable:not(.is-raw) {
+  cursor: pointer;
+}
+
+.md-callout-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  margin-right: 0.45em;
+  vertical-align: top;
+}
+
+.md-callout-icon {
+  display: inline-flex;
+  /* The icon sits on the middle of the first line of text, however tall the line is. */
+  height: calc(var(--line-height-text) * 1em);
+  align-items: center;
+}
+
+.md-callout-fold {
+  display: inline-flex;
+  margin-left: 0.3em;
+  vertical-align: -0.15em;
+  opacity: 0.8;
+  transform: rotate(90deg);
+  transition: transform 0.12s;
+}
+
+.md-callout-fold.is-folded {
+  transform: none;
+}
+
+/* The reading view: Live Preview that cannot be edited. A checkbox there does not tick. */
+.editor.is-reading .md-task-checkbox {
+  cursor: default;
 }
 
 /* A horizontal rule: its `---` stays in the text, invisible, under a drawn line. */

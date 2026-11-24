@@ -311,12 +311,13 @@ export function Settings({ config, app, vaultRoot, section, onSection, onClose }
       config && options ? (
         <>
           {broken(SETTINGS_FILE)}
-          <Row title="Default mode" hint="What a note opens in. Live Preview renders Markdown as you write; source shows it as typed.">
+          <Row title="Default mode" hint="What a note opens in. Live Preview renders Markdown as you write; source shows it as typed; reading shows it rendered, not editable.">
             <div className="segmented" role="group" aria-label="Default mode">
               {(
                 [
                   ["live-preview", "Live Preview"],
                   ["source", "Source"],
+                  ["reading", "Reading"],
                 ] as const
               ).map(([mode, label]) => (
                 <button key={mode} aria-pressed={options.defaultMode === mode} onClick={() => set("defaultMode", mode)}>

@@ -7,11 +7,12 @@
 // The `md-*` class names are styled in app.css and are what themes target.
 
 import { syntaxTree } from "@codemirror/language";
-import { type EditorState, Facet, type Line, type Range, StateField, Transaction } from "@codemirror/state";
+import { type EditorState, Facet, type Line, MapMode, type Range, StateEffect, StateField, Transaction } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { GFM, type MarkdownConfig, type MarkdownExtension } from "@lezer/markdown";
 import { commands } from "../commands";
+import { CALLOUT_ICONS, type CalloutHead, type CalloutKind, defaultTitle, FOLD_ICON, isFolded, readCallout } from "./callout";
 import { type PropRow, readProps } from "./frontmatter";
 
 /** YAML frontmatter: a `---` line at the very start of the note, up to the next `---` or `...` line. */
@@ -66,6 +67,12 @@ export const markdownSyntax: MarkdownExtension = [GFM, frontmatter, wikilink];
 /** True in an editor that is in Live Preview, false in source mode. For extensions that modules add (src/modules.ts). */
 export const livePreviewOn = Facet.define<boolean, boolean>({ combine: (values) => values.length > 0 });
 
+/**
+ * True in the reading view: Live Preview's decorations in an editor that cannot be edited (Editor.tsx), where the
+ * markup never shows, a checkbox is not ticked by a click and the properties block does not open. Links still follow.
+ */
+export const readingOn = Facet.define<boolean, boolean>({ combine: (values) => values.length > 0 });
+
 /** The URLs to try, in order, for an image written as `src` in the note. */
 export type ImageSources = (src: string) => Promise<string[]>;
 
@@ -106,6 +113,8 @@ class Checkbox extends WidgetType {
     box.onclick = (event) => {
       // The box shows what the document says, so the tick comes from the edit, not from the click.
       event.preventDefault();
+      // shortcut: a box in the reading view does not tick, as nothing there edits the note; let it tick (Obsidian's reading view does) if that is missed
+      if (view.state.readOnly) return;
       const marker = view.posAtDOM(wrap) + this.offset;
       if (view.state.sliceDoc(marker, marker + 1) !== "[") return;
       view.dispatch({ changes: { from: marker + 1, to: marker + 2, insert: this.checked ? " " : "x" } });
@@ -262,7 +271,7 @@ const number = Decoration.mark({ class: "md-list-marker md-list-number" });
 /** The spaces before the marker of a nested item. The line's padding indents it instead. */
 const listIndent = Decoration.mark({ class: "md-list-indent" });
 const inlineCode = Decoration.mark({ class: "md-inline-code" });
-const lineClass = (name: string, style?: string) => Decoration.line({ class: name, attributes: style ? { style } : undefined });
+const lineClass = (name: string, attributes?: Record<string, string>) => Decoration.line({ class: name, attributes });
 /** `link` is what `link.follow` gets when the link is clicked: a wikilink's inner text or a URL. */
 const linkMark = (kind: string, link: string) =>
   Decoration.mark({ class: `md-link ${kind}`, attributes: { "data-link": link } });
@@ -308,6 +317,7 @@ class Properties extends WidgetType {
     // the block can stand under the title, where a click would put the cursor in the title's line.
     box.addEventListener("mousedown", (event) => {
       event.preventDefault();
+      if (view.state.facet(readingOn)) return;
       view.dispatch({ selection: { anchor: view.state.doc.line(2).from } });
       view.focus();
     });
@@ -360,7 +370,7 @@ function propertiesOf(state: EditorState): DecorationSet {
     const line = doc.line(n);
     if (/^(---|\.\.\.)\s*$/.test(line.text)) {
       const rows = readProps(body);
-      const inside = state.field(cursorPlaced) && selection.ranges.some((r) => r.from <= line.to);
+      const inside = !state.facet(readingOn) && state.field(cursorPlaced) && selection.ranges.some((r) => r.from <= line.to);
       if (!rows || rows.length === 0 || inside) break;
       // The YAML is hidden and the block is a widget of its own after it, or after the title. As the YAML's
       // replacement it would get the cursor of a note that was just opened drawn beside it, as high as the block.
@@ -372,6 +382,123 @@ function propertiesOf(state: EditorState): DecorationSet {
     body.push(line.text);
   }
   return Decoration.none;
+}
+
+/** The start of a callout's first line, in place of its `> [!type]- `: the type's icon, and its name when there is no title. */
+class CalloutTitle extends WidgetType {
+  constructor(
+    readonly kind: CalloutKind,
+    /** Empty when the callout has a title of its own. */
+    readonly name: string,
+  ) {
+    super();
+  }
+
+  eq(other: CalloutTitle) {
+    return other.kind === this.kind && other.name === this.name;
+  }
+
+  toDOM() {
+    const box = document.createElement("span");
+    box.className = "md-callout-head";
+    const icon = box.appendChild(document.createElement("span"));
+    icon.className = "md-callout-icon";
+    icon.innerHTML = CALLOUT_ICONS[this.kind];
+    if (this.name) box.appendChild(document.createElement("span")).textContent = this.name;
+    return box;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+}
+
+/** The fold mark at the end of a foldable callout's first line. */
+class CalloutFold extends WidgetType {
+  constructor(readonly folded: boolean) {
+    super();
+  }
+
+  eq(other: CalloutFold) {
+    return other.folded === this.folded;
+  }
+
+  toDOM() {
+    const mark = document.createElement("span");
+    mark.className = this.folded ? "md-callout-fold is-folded" : "md-callout-fold";
+    mark.innerHTML = FOLD_ICON;
+    return mark;
+  }
+
+  ignoreEvent() {
+    return false;
+  }
+}
+
+/** Folds or opens the callout whose first line starts here. Only the view changes, never the text. */
+const flipCallout = StateEffect.define<number>({ map: (pos, change) => change.mapPos(pos, -1) });
+
+/**
+ * The first lines (their start) of the callouts that were clicked open or shut, against what their `-` or `+`
+ * says. Kept through edits; a line that is deleted drops out. One field for every Live Preview extension, like
+ * `cursorPlaced`, so a fold stays when the extension is made again.
+ */
+const calloutFlips = StateField.define<readonly number[]>({
+  create: () => [],
+  update(flips, tr) {
+    let next = tr.docChanged
+      ? flips.map((pos) => tr.changes.mapPos(pos, -1, MapMode.TrackDel)).filter((pos): pos is number => pos !== null)
+      : flips;
+    for (const effect of tr.effects) {
+      if (effect.is(flipCallout)) next = next.includes(effect.value) ? next.filter((pos) => pos !== effect.value) : [...next, effect.value];
+    }
+    return next;
+  },
+});
+
+/** The callout of a quote that starts at `from` (its first `>`), with its first line and whether it shows folded. Null for a plain quote. */
+function calloutAt(state: EditorState, from: number): { head: CalloutHead; line: Line; folded: boolean } | null {
+  const line = state.doc.lineAt(from);
+  const head = readCallout(state.sliceDoc(from, line.to));
+  return head && { head, line, folded: isFolded(head, state.field(calloutFlips, false)?.includes(line.from) ?? false) };
+}
+
+/** Whether a quote is inside a callout. Such a callout is drawn as a plain quote inside the outer one. */
+const inCallout = (state: EditorState, node: ReturnType<typeof syntaxTree>["topNode"]) => {
+  for (let up = node.parent; up; up = up.parent) if (up.name === "Blockquote" && calloutAt(state, up.from)) return true;
+  return false;
+};
+
+const foldedBody = Decoration.replace({});
+
+/**
+ * The lines under the first line of each folded callout, hidden. A field, because only a field may hide line breaks.
+ * Whether the cursor is in the callout does not matter: a fold is opened with a click on the title, or by
+ * deleting its `-`.
+ */
+// shortcut: reads the note's whole syntax tree on each edit, fast for notes of a few thousand lines; look only at the changed range if that lags
+const calloutFolds = StateField.define<DecorationSet>({
+  create: foldsOf,
+  update: (folds, tr) =>
+    tr.docChanged || syntaxTree(tr.startState) !== syntaxTree(tr.state) || tr.effects.some((e) => e.is(flipCallout)) ? foldsOf(tr.state) : folds,
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+function foldsOf(state: EditorState): DecorationSet {
+  const out: Range<Decoration>[] = [];
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name === "Blockquote") {
+        const callout = calloutAt(state, node.from);
+        const end = state.doc.lineAt(node.to).to;
+        if (callout?.folded && end > callout.line.to) out.push(foldedBody.range(callout.line.to, end));
+        return false;
+      }
+      // Quotes are at the top of the note or in lists. Nothing else holds one.
+      return node.name === "Document" || node.name === "BulletList" || node.name === "OrderedList" || node.name === "ListItem";
+    },
+  });
+  return Decoration.set(out);
 }
 
 /** Whether the editor's text is what has the focus in the window. Unlike `view.hasFocus`, also while another app is in front. */
@@ -390,7 +517,7 @@ function build(
   const text = (from: number, to: number) => doc.sliceString(from, to);
   // The one rule for showing markup as written: only in the editor that has the focus, and only once the cursor
   // was put somewhere in it. A note that was just opened, or that sits in another pane, shows everything rendered.
-  const reveal = view.state.field(cursorPlaced) && focused(view);
+  const reveal = !view.state.facet(readingOn) && view.state.field(cursorPlaced) && focused(view);
   /** Whether the cursor or a selection is in or at the edge of this range, in an editor that shows markup there. */
   const touched = (from: number, to: number) => reveal && selection.ranges.some((r) => r.from <= to && r.to >= from);
   const lineTouched = (pos: number) => {
@@ -401,6 +528,10 @@ function build(
   const hide = (from: number, to: number) => {
     if (from < to && doc.lineAt(from).to >= to) out.push(hidden.range(from, to));
   };
+  /** The `>` of each callout's first line that the callout's title stands in place of, and the callouts shown as written. */
+  const calloutMarks = new Set<number>();
+  const rawCallouts: { from: number; to: number }[] = [];
+  const calloutsDrawn = new Set<number>();
   const image = (from: number, to: number, src: string, alt: string) => {
     out.push(Decoration.widget({ widget: new Image(src, alt, sources), side: 1 }).range(to));
     if (!touched(from, to)) hide(from, to);
@@ -408,11 +539,11 @@ function build(
 
   for (const visible of view.visibleRanges) {
     /** Adds a class to every visible line of a block. */
-    const lines = (from: number, to: number, name: string, style?: string) => {
+    const lines = (from: number, to: number, name: string, attributes?: Record<string, string>) => {
       const end = Math.min(to, visible.to);
       for (let pos = Math.max(from, visible.from); pos <= end; ) {
         const line = doc.lineAt(pos);
-        out.push(lineClass(name, style).range(line.from));
+        out.push(lineClass(name, attributes).range(line.from));
         pos = line.to + 1;
       }
     };
@@ -518,7 +649,7 @@ function build(
             // class every line of the item that is not in a nested item when notes use that
             const nested = ref.node.getChild("BulletList") ?? ref.node.getChild("OrderedList");
             const end = nested ? doc.lineAt(nested.from).from - 1 : to;
-            lines(from, Math.max(from, end), `md-list-line${depth % 2 ? "" : " md-list-even"}${done ? " md-task-done" : ""}`, `--list-depth: ${depth}`);
+            lines(from, Math.max(from, end), `md-list-line${depth % 2 ? "" : " md-list-even"}${done ? " md-task-done" : ""}`, { style: `--list-depth: ${depth}` });
             const start = doc.lineAt(from).from;
             if (start < from) out.push(listIndent.range(start, from));
             return;
@@ -542,10 +673,34 @@ function build(
             return;
           }
 
-          case "Blockquote":
-            return lines(from, to, "md-blockquote");
+          case "Blockquote": {
+            // shortcut: a callout inside a callout is drawn as a plain quote in the outer one; give it a box of its own when nested callouts are wanted
+            const callout = inCallout(view.state, ref.node) ? null : calloutAt(view.state, from);
+            if (!callout) return lines(from, to, "md-blockquote");
+            // A callout: a box in its type's colour, its first line the title. With the cursor in it, all of its
+            // markup shows; the box and a fold stay.
+            const { head, line, folded } = callout;
+            const raw = touched(from, to);
+            const foldable = head.fold ? " is-foldable" : "";
+            lines(from, to, `md-callout md-callout-${head.kind}`, { "data-callout": head.type });
+            // A fold splits the visible ranges, so the same callout comes up again in the range after it.
+            if (calloutsDrawn.has(from)) return;
+            calloutsDrawn.add(from);
+            out.push(lineClass(`md-callout-title${foldable}${folded ? " is-folded" : ""}${raw ? " is-raw" : ""}`).range(line.from));
+            out.push(lineClass("md-callout-end").range(folded ? line.from : doc.lineAt(to).from));
+            if (raw) {
+              rawCallouts.push({ from, to });
+              return;
+            }
+            calloutMarks.add(from);
+            out.push(Decoration.replace({ widget: new CalloutTitle(head.kind, head.title ? "" : defaultTitle(head.type)) }).range(from, from + head.titleAt));
+            // Before the end of the line: a folded body is hidden from there on, and the mark must stay out of it.
+            if (head.fold) out.push(Decoration.widget({ widget: new CalloutFold(folded), side: -1 }).range(line.to));
+            return;
+          }
 
           case "QuoteMark":
+            if (calloutMarks.has(from) || rawCallouts.some((c) => c.from <= from && from <= c.to)) return;
             if (!lineTouched(from)) hide(from, to + (text(to, to + 1) === " " ? 1 : 0));
             return;
 
@@ -635,7 +790,8 @@ export function livePreview(sources: ImageSources, embeds: Embeds, version: numb
 
       update(update: ViewUpdate) {
         const parsed = syntaxTree(update.startState) !== syntaxTree(update.state);
-        if (update.docChanged || update.viewportChanged || parsed || (!this.held && (update.selectionSet || this.stale))) {
+        const flipped = update.transactions.some((tr) => tr.effects.some((e) => e.is(flipCallout)));
+        if (update.docChanged || update.viewportChanged || parsed || flipped || (!this.held && (update.selectionSet || this.stale))) {
           this.decorations = build(update.view, sources, embeds, version, this.exists);
           this.stale = false;
         } else if (update.selectionSet) {
@@ -675,6 +831,13 @@ export function livePreview(sources: ImageSources, embeds: Embeds, version: numb
             void commands.run("link.follow", { link: link.dataset.link });
             return true;
           }
+          // A click on the title of a foldable callout folds or opens it, unless its markup shows and the click edits it.
+          const title = plain ? (event.target as Element).closest<HTMLElement>(".md-callout-title.is-foldable:not(.is-raw)") : null;
+          if (title) {
+            event.preventDefault();
+            this.view.dispatch({ effects: flipCallout.of(this.view.state.doc.lineAt(this.view.posAtDOM(title)).from) });
+            return true;
+          }
           this.held = true;
           return false;
         },
@@ -687,5 +850,5 @@ export function livePreview(sources: ImageSources, embeds: Embeds, version: numb
       },
     },
   );
-  return [cursorPlaced, properties, plugin, livePreviewOn.of(true)];
+  return [cursorPlaced, properties, calloutFlips, calloutFolds, plugin, livePreviewOn.of(true)];
 }

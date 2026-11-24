@@ -3,6 +3,8 @@
 // The ones that are set go on <html> as inline CSS variables, so they win over the theme and the snippets.
 // `defaultMode` and `historyDiff` are kept here too: not looks, but options of the same kind.
 
+import type { EditorMode } from "./workspace.ts";
+
 export type AppearanceMode = "system" | "light" | "dark";
 
 export interface Options {
@@ -19,7 +21,7 @@ export interface Options {
   /** `--line-width`, in rem. */
   lineWidth: number | null;
   /** The editor mode a vault opens in. */
-  defaultMode: "live-preview" | "source";
+  defaultMode: EditorMode;
   /** Where the history panel shows what changed since the picked version: under its list, or in a pane beside the note. */
   historyDiff: "sidebar" | "pane";
 }
@@ -52,7 +54,7 @@ const VALID: Record<keyof Options, { ok(value: unknown): boolean; expects: strin
   textFont: { ok: cssText, expects: "a font family, e.g. Georgia, serif" },
   textFontSize: { ok: between(10, 32), expects: "a number from 10 to 32 (px)" },
   lineWidth: { ok: between(20, 120), expects: "a number from 20 to 120 (rem)" },
-  defaultMode: { ok: oneOf("live-preview", "source"), expects: '"live-preview" or "source"' },
+  defaultMode: { ok: oneOf("live-preview", "source", "reading"), expects: '"live-preview", "source" or "reading"' },
   historyDiff: { ok: oneOf("sidebar", "pane"), expects: '"sidebar" or "pane"' },
 };
 
